@@ -112,6 +112,20 @@ export function Game({ frames, onExit }: Props) {
     setSelected(next);
   };
 
+  // 数字キー 1〜(枠の数) で枠を選ぶ
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const n = Number(e.key);
+      if (!Number.isInteger(n) || n < 1 || n > framesRef.current.length) return;
+      const i = n - 1;
+      const next = selectedRef.current === i ? null : i;
+      selectedRef.current = next;
+      setSelected(next);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   const restart = () => {
     stateRef.current = createState(stage01);
     setStatus('playing');
@@ -182,14 +196,14 @@ export function Game({ frames, onExit }: Props) {
               fontWeight: 'bold',
             }}
           >
-            {kind ? SHAPE_INFO[kind].label : '空'}
+            {i + 1}. {kind ? SHAPE_INFO[kind].label : '空'}
           </button>
         ))}
       </div>
       <p style={{ fontSize: 13, color: '#555', margin: '4px 0' }}>
         {selectedKind
           ? `「${SHAPE_INFO[selectedKind].label}」を選択中: ${SHAPE_INFO[selectedKind].description}。画面をクリックで置けます(もう一度枠を押すと解除)`
-          : '枠を選ぶと形を置けます。枠を選ばないと、マウス・指で線を描けます。'}
+          : '枠を選ぶと形を置けます(数字キー1〜でも選べます)。枠を選ばないと、マウス・指で線を描けます。'}
       </p>
     </div>
   );

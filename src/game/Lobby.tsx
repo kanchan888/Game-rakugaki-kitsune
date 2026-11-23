@@ -77,9 +77,9 @@ export function Lobby({ save, onChange, onStart }: Props) {
       <section>
         <h2 style={{ fontSize: 18, margin: '0 0 8px' }}>持っている形</h2>
         <ul style={{ margin: 0, paddingLeft: 20 }}>
-          {SHAPE_KINDS.map((k) => (
+          {SHAPE_KINDS.map((k, idx) => (
             <li key={k}>
-              <b style={{ color: SHAPE_INFO[k].color }}>{SHAPE_INFO[k].label}</b> × {save.inventory[k]}
+              {idx + 1}. <b style={{ color: SHAPE_INFO[k].color }}>{SHAPE_INFO[k].label}</b> × {save.inventory[k]}
               (能力: {SHAPE_INFO[k].description})
             </li>
           ))}
