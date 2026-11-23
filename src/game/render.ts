@@ -1,4 +1,5 @@
 import { PLAYER_RADIUS, SCREEN_H, SCREEN_W, INK_START, cameraX, type GameState } from './engine';
+import { SHAPE_INFO } from './shapes';
 import type { Segment, Vec } from './types';
 
 export function draw(ctx: CanvasRenderingContext2D, s: GameState): void {
@@ -11,7 +12,8 @@ export function draw(ctx: CanvasRenderingContext2D, s: GameState): void {
   ctx.translate(-cam, 0);
 
   drawSegments(ctx, s.stage.ground, '#7a5a3a', 10);
-  drawSegments(ctx, s.lines, '#1f6feb', 6);
+  drawSegments(ctx, s.lines.filter((l) => !l.kind), '#1f6feb', 6);
+  drawShapes(ctx, s.lines.filter((l) => l.kind));
   drawCheckpoints(ctx, s.stage.checkpoints);
   drawGoal(ctx, s.stage.goal);
 
@@ -38,6 +40,25 @@ function drawSegments(ctx: CanvasRenderingContext2D, segs: Segment[], color: str
     ctx.moveTo(seg.a.x, seg.a.y);
     ctx.lineTo(seg.b.x, seg.b.y);
     ctx.stroke();
+  }
+}
+
+function drawShapes(ctx: CanvasRenderingContext2D, segs: Segment[]): void {
+  ctx.lineCap = 'round';
+  for (const seg of segs) {
+    if (!seg.kind) continue;
+    const info = SHAPE_INFO[seg.kind];
+    ctx.strokeStyle = info.color;
+    ctx.lineWidth = 10;
+    ctx.beginPath();
+    ctx.moveTo(seg.a.x, seg.a.y);
+    ctx.lineTo(seg.b.x, seg.b.y);
+    ctx.stroke();
+    ctx.fillStyle = info.color;
+    ctx.font = 'bold 12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(info.label, (seg.a.x + seg.b.x) / 2, Math.min(seg.a.y, seg.b.y) - 6);
   }
 }
 

@@ -3,9 +3,14 @@ export interface Vec {
   y: number;
 }
 
+/** 枠に入れて置ける形の種類(能力つき)。 */
+export type ShapeKind = 'foothold' | 'jump' | 'boost' | 'slow' | 'float';
+
 export interface Segment {
   a: Vec;
   b: Vec;
+  /** 置いた形の場合のみ入る。自由に描いた線や地形には無い。 */
+  kind?: ShapeKind;
 }
 
 export interface Stage {

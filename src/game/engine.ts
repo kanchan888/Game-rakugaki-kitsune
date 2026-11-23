@@ -1,4 +1,5 @@
-import type { Segment, Stage, Vec } from './types';
+import { INK_COST_PER_SHAPE, SHAPE_LENGTH } from './shapes';
+import type { Segment, ShapeKind, Stage, Vec } from './types';
 
 export const SCREEN_W = 960;
 export const SCREEN_H = 540;
@@ -9,10 +10,15 @@ export const RUN_SPEED = 170;
 
 export const INK_START = 200;
 export const INK_MAX = 200; // 仮: 回復の上限(要確認)
-export const INK_COST_PER_PX = 0.3; // 1pxあたりの墨の減り(小さいほどゆっくり減る。試作で調整)
+export const INK_COST_PER_PX = 0.3; // 自由描画1pxあたりの墨の減り(試作で調整)
 export const INK_PICKUP = 100;
 export const LIVES_START = 3;
 export const COIN_CLEAR_REWARD = 100; // 仮: 数値は試作で調整
+
+const JUMP_SPEED = 620; // ジャンプ台の跳ね上がり速度(px/s)
+const BOOST_MUL = 1.8; // 加速の倍率
+const SLOW_MUL = 0.5; // 減速の倍率
+const FLOAT_MAX_FALL = 60; // ふわふわで落下速度がこれを超えないようにする(px/s)
 
 const MIN_STROKE_STEP = 4; // これ未満の移動では線を伸ばさない
 const PICKUP_RADIUS = 18;
@@ -26,6 +32,7 @@ export interface GameState {
   pos: Vec;
   vel: Vec;
   respawn: Vec;
+  /** 自由に描いた線と、置いた形の両方。失敗時に全部消える。 */
   lines: Segment[];
   ink: number;
   lives: number;
@@ -35,6 +42,8 @@ export interface GameState {
   status: 'playing' | 'cleared' | 'gameover';
   stuckTime: number;
   stroke: Vec | null;
+  /** 直前のステップで主人公が触れている形の種類。 */
+  contacts: ShapeKind[];
   message: string;
 }
 
@@ -53,6 +62,7 @@ export function createState(stage: Stage): GameState {
     status: 'playing',
     stuckTime: 0,
     stroke: null,
+    contacts: [],
     message: '',
   };
 }
@@ -89,6 +99,19 @@ export function endStroke(s: GameState): void {
   s.stroke = null;
 }
 
+/** 枠の形を、指定の位置(中心)に置く。墨が足りなければ置けない。 */
+export function placeShape(s: GameState, kind: ShapeKind, at: Vec): boolean {
+  if (s.status !== 'playing' || s.ink < INK_COST_PER_SHAPE) return false;
+  const half = SHAPE_LENGTH / 2;
+  s.lines.push({
+    a: { x: at.x - half, y: at.y },
+    b: { x: at.x + half, y: at.y },
+    kind,
+  });
+  s.ink -= INK_COST_PER_SHAPE;
+  return true;
+}
+
 /** 1フレーム分の更新。dtは秒。 */
 export function update(s: GameState, dtRaw: number): void {
   if (s.status !== 'playing') return;
@@ -106,14 +129,26 @@ function step(s: GameState, dt: number): void {
   const v = s.vel;
   const prevX = p.x;
 
-  // 主人公は自動で右へ進む。操作は線を描くことだけ。
-  v.x = RUN_SPEED;
+  // 主人公は自動で右へ進む。操作は形を置くことと線を描くこと。
+  // 直前に触れている形で速さが変わる。
+  const mul = s.contacts.includes('slow') ? SLOW_MUL : s.contacts.includes('boost') ? BOOST_MUL : 1;
+  v.x = RUN_SPEED * mul;
   v.y += GRAVITY * dt;
   p.x += v.x * dt;
   p.y += v.y * dt;
 
   for (const seg of s.stage.ground) resolve(p, v, seg);
-  for (const seg of s.lines) resolve(p, v, seg);
+
+  const contacts: ShapeKind[] = [];
+  for (const seg of s.lines) {
+    const ny = resolve(p, v, seg);
+    if (ny === null || !seg.kind) continue;
+    contacts.push(seg.kind);
+    // ジャンプ台は上から乗ったときだけ跳ね上げる
+    if (seg.kind === 'jump' && ny < -0.5) v.y = -JUMP_SPEED;
+  }
+  s.contacts = contacts;
+  if (contacts.includes('float') && v.y > FLOAT_MAX_FALL) v.y = FLOAT_MAX_FALL;
 
   const moved = p.x - prevX;
   if (moved < RUN_SPEED * dt * 0.3) {
@@ -159,9 +194,10 @@ function afterStep(s: GameState): void {
 function loseLife(s: GameState, reason: string): void {
   s.lives -= 1;
   s.message = reason;
-  // 仕様: 失敗したら描いた線を全部消し、墨を満タン(200)に戻す
+  // 仕様: 失敗したら描いた線と置いた形を全部消し、墨を満タン(200)に戻す
   s.lines = [];
   s.ink = INK_START;
+  s.contacts = [];
   if (s.lives <= 0) {
     s.status = 'gameover';
     return;
@@ -172,8 +208,11 @@ function loseLife(s: GameState, reason: string): void {
   s.stroke = null;
 }
 
-/** 円(主人公)と線分の衝突を解決する。接触方向の速度は消す。 */
-function resolve(p: Vec, v: Vec, seg: Segment): void {
+/**
+ * 円(主人公)と線分の衝突を解決する。接触方向の速度は消す。
+ * 接触したら法線のy成分(上から乗ると負)を返し、接触しなければ null を返す。
+ */
+function resolve(p: Vec, v: Vec, seg: Segment): number | null {
   const ax = seg.a.x;
   const ay = seg.a.y;
   const bx = seg.b.x - ax;
@@ -187,7 +226,7 @@ function resolve(p: Vec, v: Vec, seg: Segment): void {
   const dx = p.x - cx;
   const dy = p.y - cy;
   const d = Math.hypot(dx, dy);
-  if (d >= PLAYER_RADIUS) return;
+  if (d >= PLAYER_RADIUS) return null;
 
   const nx = d < 1e-6 ? 0 : dx / d;
   const ny = d < 1e-6 ? -1 : dy / d;
@@ -199,6 +238,7 @@ function resolve(p: Vec, v: Vec, seg: Segment): void {
     v.x -= vn * nx;
     v.y -= vn * ny;
   }
+  return ny;
 }
 
 function dist(a: Vec, b: Vec): number {

@@ -5,22 +5,34 @@ import {
   createState,
   endStroke,
   extendStroke,
+  placeShape,
   SCREEN_H,
   SCREEN_W,
   update,
   type GameState,
 } from './engine';
+import { SHAPE_INFO } from './shapes';
 import { draw } from './render';
 import { stage01 } from './stages/stage01';
-import type { Vec } from './types';
+import type { ShapeKind, Vec } from './types';
 
 type Status = GameState['status'];
 
-export function Game() {
+interface Props {
+  /** ロビーで設定した枠の中身。 */
+  frames: (ShapeKind | null)[];
+  /** ステージを終えてロビーへ戻る。獲得したコインを渡す。 */
+  onExit: (coinsEarned: number) => void;
+}
+
+export function Game({ frames, onExit }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stateRef = useRef<GameState>(createState(stage01));
+  const selectedRef = useRef<number | null>(null);
+  const framesRef = useRef(frames);
   const [status, setStatus] = useState<Status>('playing');
   const [message, setMessage] = useState('');
+  const [selected, setSelected] = useState<number | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -58,11 +70,19 @@ export function Game() {
       return { x: sx + cameraX(stateRef.current), y: sy };
     };
 
+    // 枠を選んでいるときは、クリックした位置に形を置く。選んでいないときは線を描く。
     let drawing = false;
     const onDown = (e: PointerEvent) => {
+      const s = stateRef.current;
+      const sel = selectedRef.current;
+      const kind = sel !== null ? framesRef.current[sel] : null;
+      if (kind) {
+        placeShape(s, kind, toWorld(e));
+        return;
+      }
       drawing = true;
       canvas.setPointerCapture(e.pointerId);
-      beginStroke(stateRef.current, toWorld(e));
+      beginStroke(s, toWorld(e));
     };
     const onMove = (e: PointerEvent) => {
       if (drawing) extendStroke(stateRef.current, toWorld(e));
@@ -86,11 +106,19 @@ export function Game() {
     };
   }, []);
 
+  const chooseFrame = (i: number) => {
+    const next = selected === i ? null : i;
+    selectedRef.current = next;
+    setSelected(next);
+  };
+
   const restart = () => {
     stateRef.current = createState(stage01);
     setStatus('playing');
     setMessage('');
   };
+
+  const selectedKind = selected !== null ? frames[selected] : null;
 
   return (
     <div style={{ width: '100%', maxWidth: SCREEN_W, margin: '0 auto' }}>
@@ -120,14 +148,48 @@ export function Game() {
               {status === 'cleared' ? 'ステージクリア!' : 'ゲームオーバー'}
             </div>
             <div>{message}</div>
-            <button onClick={restart} style={{ padding: '8px 20px', fontSize: 16, cursor: 'pointer' }}>
-              もう一度
-            </button>
+            <div style={{ display: 'flex', gap: 12 }}>
+              {status === 'gameover' && (
+                <button onClick={restart} style={{ padding: '8px 20px', fontSize: 16, cursor: 'pointer' }}>
+                  もう一度
+                </button>
+              )}
+              <button
+                onClick={() => onExit(stateRef.current.coins)}
+                style={{ padding: '8px 20px', fontSize: 16, cursor: 'pointer' }}
+              >
+                ロビーへ
+              </button>
+            </div>
           </div>
         )}
       </div>
-      <p style={{ fontSize: 13, color: '#555' }}>
-        マウス・指で線を描いてください。線は墨(インク)を使います。
+
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', margin: '10px 0' }}>
+        {frames.map((kind, i) => (
+          <button
+            key={i}
+            onClick={() => chooseFrame(i)}
+            disabled={!kind}
+            style={{
+              padding: '8px 12px',
+              minWidth: 96,
+              cursor: kind ? 'pointer' : 'default',
+              border: selected === i ? '3px solid #1f6feb' : '1px solid #999',
+              background: kind ? SHAPE_INFO[kind].color : '#eee',
+              color: kind ? '#fff' : '#888',
+              borderRadius: 6,
+              fontWeight: 'bold',
+            }}
+          >
+            {kind ? SHAPE_INFO[kind].label : '空'}
+          </button>
+        ))}
+      </div>
+      <p style={{ fontSize: 13, color: '#555', margin: '4px 0' }}>
+        {selectedKind
+          ? `「${SHAPE_INFO[selectedKind].label}」を選択中: ${SHAPE_INFO[selectedKind].description}。画面をクリックで置けます(もう一度枠を押すと解除)`
+          : '枠を選ぶと形を置けます。枠を選ばないと、マウス・指で線を描けます。'}
       </p>
     </div>
   );
