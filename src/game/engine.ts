@@ -197,6 +197,8 @@ function loseLife(s: GameState, reason: string): void {
   // 仕様: 失敗したら描いた線と置いた形を全部消し、墨を満タン(200)に戻す
   s.lines = [];
   s.ink = INK_START;
+  // 墨のアイテムも復活させる(墨が満タンに戻るため、再び拾えるようにする)
+  s.pickupsGot = s.stage.inkPickups.map(() => false);
   s.contacts = [];
   if (s.lives <= 0) {
     s.status = 'gameover';
