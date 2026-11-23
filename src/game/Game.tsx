@@ -127,8 +127,8 @@ export function Game({ frames, onExit }: Props) {
   // 数字キー 1〜(枠の数) で枠を選ぶ
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      // E/Esc で一時停止。ボタンにフォーカスがあるときは、ボタン側の操作に任せる
-      if (e.key === 'Escape' || ((e.key === 'e' || e.key === 'E') && !(e.target instanceof HTMLButtonElement))) {
+      // E/Esc で一時停止(ボタンにフォーカスがあっても効くようにする)
+      if (e.key === 'Escape' || e.key === 'e' || e.key === 'E') {
         togglePause();
         return;
       }
