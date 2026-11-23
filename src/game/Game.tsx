@@ -115,7 +115,7 @@ export function Game({ frames, onExit }: Props) {
     setSelected(next);
   };
 
-  // 一時停止: Enter キーか Esc キー。停止中は数字キーの枠選択も止める
+  // 一時停止: E キーか Esc キー。停止中は数字キーの枠選択も止める
   const togglePause = () => {
     if (stateRef.current.status !== 'playing') return;
     const next = !pausedRef.current;
@@ -127,8 +127,8 @@ export function Game({ frames, onExit }: Props) {
   // 数字キー 1〜(枠の数) で枠を選ぶ
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      // Enter/Esc で一時停止。ボタンにフォーカスがあるEnterは、ボタン側の操作に任せる
-      if (e.key === 'Escape' || (e.key === 'Enter' && !(e.target instanceof HTMLButtonElement))) {
+      // E/Esc で一時停止。ボタンにフォーカスがあるときは、ボタン側の操作に任せる
+      if (e.key === 'Escape' || ((e.key === 'e' || e.key === 'E') && !(e.target instanceof HTMLButtonElement))) {
         togglePause();
         return;
       }
@@ -159,7 +159,7 @@ export function Game({ frames, onExit }: Props) {
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 6 }}>
         {status === 'playing' && (
           <button onClick={togglePause} style={{ padding: '6px 14px', fontSize: 14, cursor: 'pointer' }}>
-            {paused ? '再開(Enter)' : '一時停止(Enter)'}
+            {paused ? '再開(E)' : '一時停止(E)'}
           </button>
         )}
       </div>
