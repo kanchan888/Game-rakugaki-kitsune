@@ -30,7 +30,6 @@ export function Game({ frames, onExit }: Props) {
   const stateRef = useRef<GameState>(createState(stage01));
   const selectedRef = useRef<number | null>(null);
   const framesRef = useRef(frames);
-  const pausedRef = useRef(false);
   const [status, setStatus] = useState<Status>('playing');
   const [message, setMessage] = useState('');
   const [selected, setSelected] = useState<number | null>(null);
@@ -51,7 +50,7 @@ export function Game({ frames, onExit }: Props) {
       const dt = (now - last) / 1000;
       last = now;
       const s = stateRef.current;
-      if (!pausedRef.current) update(s, dt);
+      update(s, dt);
       draw(ctx, s);
       if (s.status !== lastStatus) {
         lastStatus = s.status;
@@ -75,8 +74,8 @@ export function Game({ frames, onExit }: Props) {
     // 枠を選んでいるときは、クリックした位置に形を置く。選んでいないときは線を描く。
     let drawing = false;
     const onDown = (e: PointerEvent) => {
-      if (pausedRef.current) return;
       const s = stateRef.current;
+      if (s.paused) return;
       const sel = selectedRef.current;
       const kind = sel !== null ? framesRef.current[sel] : null;
       if (kind) {
@@ -117,11 +116,11 @@ export function Game({ frames, onExit }: Props) {
 
   // 一時停止: E キーか Esc キー。停止中は数字キーの枠選択も止める
   const togglePause = () => {
-    if (stateRef.current.status !== 'playing') return;
-    const next = !pausedRef.current;
-    pausedRef.current = next;
-    setPaused(next);
-    endStroke(stateRef.current);
+    const s = stateRef.current;
+    if (s.status !== 'playing') return;
+    s.paused = !s.paused;
+    setPaused(s.paused);
+    endStroke(s);
   };
 
   // 数字キー 1〜(枠の数) で枠を選ぶ
@@ -132,7 +131,7 @@ export function Game({ frames, onExit }: Props) {
         togglePause();
         return;
       }
-      if (pausedRef.current) return;
+      if (stateRef.current.paused) return;
       const n = Number(e.key);
       if (!Number.isInteger(n) || n < 1 || n > framesRef.current.length) return;
       const i = n - 1;
@@ -146,7 +145,6 @@ export function Game({ frames, onExit }: Props) {
 
   const restart = () => {
     stateRef.current = createState(stage01);
-    pausedRef.current = false;
     setPaused(false);
     setStatus('playing');
     setMessage('');

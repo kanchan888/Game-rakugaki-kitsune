@@ -50,6 +50,8 @@ export interface GameState {
   pickupsGot: boolean[];
   coins: number;
   status: 'playing' | 'cleared' | 'gameover';
+  /** 一時停止中。true の間は時間が止まる。 */
+  paused: boolean;
   stuckTime: number;
   stroke: Vec | null;
   /** 直前のステップで主人公が触れている形の種類。 */
@@ -100,6 +102,7 @@ export function createState(stage: Stage): GameState {
     pickupsGot: stage.inkPickups.map(() => false),
     coins: 0,
     status: 'playing',
+    paused: false,
     stuckTime: 0,
     stroke: null,
     contacts: [],
@@ -156,7 +159,7 @@ export function placeShape(s: GameState, kind: ShapeKind, at: Vec): boolean {
 
 /** 1フレーム分の更新。dtは秒。 */
 export function update(s: GameState, dtRaw: number): void {
-  if (s.status !== 'playing') return;
+  if (s.status !== 'playing' || s.paused) return;
   const dt = Math.min(dtRaw, 1 / 30);
   const SUBSTEPS = 4;
   for (let i = 0; i < SUBSTEPS; i++) {
