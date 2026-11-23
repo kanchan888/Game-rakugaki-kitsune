@@ -13,21 +13,26 @@ import {
 } from './engine';
 import { SHAPE_INFO } from './shapes';
 import { draw } from './render';
-import { stage01 } from './stages/stage01';
-import type { ShapeKind, Vec } from './types';
+import type { ShapeKind, Stage, Vec } from './types';
 
 type Status = GameState['status'];
 
-interface Props {
-  /** ロビーで設定した枠の中身。 */
-  frames: (ShapeKind | null)[];
-  /** ステージを終えてロビーへ戻る。獲得したコインを渡す。 */
-  onExit: (coinsEarned: number) => void;
+export interface ExitResult {
+  coins: number;
+  cleared: boolean;
 }
 
-export function Game({ frames, onExit }: Props) {
+interface Props {
+  stage: Stage;
+  /** ロビーで設定した枠の中身。 */
+  frames: (ShapeKind | null)[];
+  /** ステージを終えてロビーへ戻る。獲得したコインと、クリアしたかを渡す。 */
+  onExit: (result: ExitResult) => void;
+}
+
+export function Game({ stage, frames, onExit }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const stateRef = useRef<GameState>(createState(stage01));
+  const stateRef = useRef<GameState>(createState(stage));
   const selectedRef = useRef<number | null>(null);
   const framesRef = useRef(frames);
   const [status, setStatus] = useState<Status>('playing');
@@ -144,7 +149,7 @@ export function Game({ frames, onExit }: Props) {
   }, []);
 
   const restart = () => {
-    stateRef.current = createState(stage01);
+    stateRef.current = createState(stage);
     setPaused(false);
     setStatus('playing');
     setMessage('');
@@ -189,7 +194,7 @@ export function Game({ frames, onExit }: Props) {
                 再開
               </button>
               <button
-                onClick={() => onExit(0)}
+                onClick={() => onExit({ coins: 0, cleared: false })}
                 style={{ padding: '8px 20px', fontSize: 16, cursor: 'pointer' }}
               >
                 ロビーへ(この面は中断)
@@ -223,7 +228,9 @@ export function Game({ frames, onExit }: Props) {
                 </button>
               )}
               <button
-                onClick={() => onExit(stateRef.current.coins)}
+                onClick={() =>
+                  onExit({ coins: stateRef.current.coins, cleared: stateRef.current.status === 'cleared' })
+                }
                 style={{ padding: '8px 20px', fontSize: 16, cursor: 'pointer' }}
               >
                 ロビーへ

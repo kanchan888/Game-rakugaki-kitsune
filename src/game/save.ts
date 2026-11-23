@@ -1,4 +1,5 @@
 import { FRAME_MAX, FRAME_START, SHAPE_KINDS } from './shapes';
+import { STAGES } from './stages';
 import type { ShapeKind } from './types';
 
 export interface SaveData {
@@ -8,6 +9,8 @@ export interface SaveData {
   frameCount: number;
   /** 枠の中身。null は空の枠。 */
   frames: (ShapeKind | null)[];
+  /** クリアしたステージの数。次のステージが1つ解放される。 */
+  clearedStage: number;
 }
 
 const KEY = 'rakugaki-kitsune-save-v1';
@@ -19,6 +22,7 @@ export function defaultSave(): SaveData {
     inventory: { foothold: 0, jump: 0, boost: 0, slow: 0, float: 0 },
     frameCount: FRAME_START,
     frames: Array.from({ length: FRAME_START }, () => null),
+    clearedStage: 0,
   };
 }
 
@@ -43,6 +47,7 @@ export function loadSave(): SaveData {
       inventory,
       frameCount,
       frames,
+      clearedStage: Math.min(STAGES.length, Math.max(0, Math.floor(Number(d.clearedStage) || 0))),
     };
   } catch {
     return base;

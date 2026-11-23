@@ -8,12 +8,13 @@ import {
   SHAPE_INFO,
   SHAPE_KINDS,
 } from './shapes';
+import { STAGES } from './stages';
 import type { ShapeKind } from './types';
 
 interface Props {
   save: SaveData;
   onChange: (updater: (prev: SaveData) => SaveData) => void;
-  onStart: () => void;
+  onStart: (stageIndex: number) => void;
 }
 
 const btn = (enabled: boolean) => ({
@@ -129,9 +130,22 @@ export function Lobby({ save, onChange, onStart }: Props) {
       </section>
 
       <section>
-        <button onClick={onStart} style={{ ...btn(true), fontSize: 18, fontWeight: 'bold', padding: '12px 28px' }}>
-          ステージ1へ
-        </button>
+        <h2 style={{ fontSize: 18, margin: '0 0 8px' }}>ステージ</h2>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+          {STAGES.map((stage, i) => {
+            const unlocked = i <= save.clearedStage;
+            return (
+              <button
+                key={stage.name}
+                onClick={() => onStart(i)}
+                disabled={!unlocked}
+                style={{ ...btn(unlocked), fontSize: 18, fontWeight: 'bold', padding: '12px 28px' }}
+              >
+                {unlocked ? `${stage.name}へ` : `${stage.name}(未解放)`}
+              </button>
+            );
+          })}
+        </div>
       </section>
     </div>
   );
