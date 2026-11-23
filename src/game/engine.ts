@@ -9,6 +9,7 @@ export const RUN_SPEED = 170;
 
 export const INK_START = 200;
 export const INK_MAX = 200; // 仮: 回復の上限(要確認)
+export const INK_COST_PER_PX = 0.3; // 1pxあたりの墨の減り(小さいほどゆっくり減る。試作で調整)
 export const INK_PICKUP = 100;
 export const LIVES_START = 3;
 export const COIN_CLEAR_REWARD = 100; // 仮: 数値は試作で調整
@@ -74,13 +75,13 @@ export function extendStroke(s: GameState, p: Vec): void {
   const dist = Math.hypot(dx, dy);
   if (dist < MIN_STROKE_STEP) return;
 
-  const cost = Math.min(dist, s.ink);
+  const len = Math.min(dist, s.ink / INK_COST_PER_PX);
   const end = {
-    x: s.stroke.x + (dx / dist) * cost,
-    y: s.stroke.y + (dy / dist) * cost,
+    x: s.stroke.x + (dx / dist) * len,
+    y: s.stroke.y + (dy / dist) * len,
   };
   s.lines.push({ a: { ...s.stroke }, b: end });
-  s.ink -= cost;
+  s.ink -= len * INK_COST_PER_PX;
   s.stroke = s.ink > 0 ? end : null;
 }
 
@@ -158,6 +159,9 @@ function afterStep(s: GameState): void {
 function loseLife(s: GameState, reason: string): void {
   s.lives -= 1;
   s.message = reason;
+  // 仕様: 失敗したら描いた線を全部消し、墨を満タン(200)に戻す
+  s.lines = [];
+  s.ink = INK_START;
   if (s.lives <= 0) {
     s.status = 'gameover';
     return;
