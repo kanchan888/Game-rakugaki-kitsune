@@ -8,6 +8,7 @@ import {
   SHAPE_INFO,
   SHAPE_KINDS,
 } from './shapes';
+import { ShapeIcon } from './ShapeIcon';
 import { STAGES } from './stages';
 import type { ShapeKind } from './types';
 
@@ -80,7 +81,8 @@ export function Lobby({ save, onChange, onStart }: Props) {
         <ul style={{ margin: 0, paddingLeft: 20 }}>
           {SHAPE_KINDS.map((k, idx) => (
             <li key={k}>
-              {idx + 1}. <b style={{ color: SHAPE_INFO[k].color }}>{SHAPE_INFO[k].label}</b> × {save.inventory[k]}
+              {idx + 1}. <ShapeIcon kind={k} size={18} color={SHAPE_INFO[k].color} />{' '}
+              <b style={{ color: SHAPE_INFO[k].color }}>{SHAPE_INFO[k].label}</b> × {save.inventory[k]}
               (能力: {SHAPE_INFO[k].description})
             </li>
           ))}

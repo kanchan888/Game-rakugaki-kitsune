@@ -19,7 +19,7 @@ const START_COINS = 100; // 最初に配るコイン(仮)
 export function defaultSave(): SaveData {
   return {
     coins: START_COINS,
-    inventory: { foothold: 0, jump: 0, boost: 0, slow: 0, float: 0 },
+    inventory: Object.fromEntries(SHAPE_KINDS.map((k) => [k, 0])) as Record<ShapeKind, number>,
     frameCount: FRAME_START,
     frames: Array.from({ length: FRAME_START }, () => null),
     clearedStage: 0,

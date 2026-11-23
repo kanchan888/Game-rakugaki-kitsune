@@ -1,5 +1,5 @@
 import { PLAYER_RADIUS, SCREEN_H, SCREEN_W, INK_START, cameraX, type GameState } from './engine';
-import { SHAPE_INFO } from './shapes';
+import { SHAPE_INFO, SHAPE_LENGTH } from './shapes';
 import type { Hint, Segment, Vec } from './types';
 
 export function draw(ctx: CanvasRenderingContext2D, s: GameState): void {
@@ -11,9 +11,10 @@ export function draw(ctx: CanvasRenderingContext2D, s: GameState): void {
   ctx.save();
   ctx.translate(-cam, 0);
 
-  drawSegments(ctx, s.stage.ground, '#7a5a3a', 10);
+  drawSegments(ctx, s.ground, '#7a5a3a', 10);
   drawSegments(ctx, s.lines.filter((l) => !l.kind), '#1f6feb', 12);
   drawShapes(ctx, s.lines.filter((l) => l.kind));
+  drawEffects(ctx, s);
   drawCheckpoints(ctx, s.stage.checkpoints);
   drawGoal(ctx, s.stage.goal);
 
@@ -66,6 +67,53 @@ function drawShapes(ctx: CanvasRenderingContext2D, segs: Segment[]): void {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'bottom';
     ctx.fillText(info.label, (seg.a.x + seg.b.x) / 2, Math.min(seg.a.y, seg.b.y) - 6);
+  }
+}
+
+/** 形ごとの見た目の効果(光・風・時間表示)。 */
+function drawEffects(ctx: CanvasRenderingContext2D, s: GameState): void {
+  for (const seg of s.lines) {
+    const lo = Math.min(seg.a.x, seg.b.x);
+    const hi = Math.max(seg.a.x, seg.b.x);
+    const y = seg.a.y;
+    const cx = (lo + hi) / 2;
+    if (seg.kind === 'redlight') {
+      // 前方の光(線1個分)
+      const g = ctx.createLinearGradient(hi, 0, hi + SHAPE_LENGTH, 0);
+      g.addColorStop(0, 'rgba(255,40,40,0.55)');
+      g.addColorStop(1, 'rgba(255,40,40,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(hi, y - 40, SHAPE_LENGTH, 44);
+    } else if (seg.kind === 'fan') {
+      // 上へ流れる風
+      ctx.strokeStyle = 'rgba(38,198,218,0.5)';
+      ctx.lineWidth = 2;
+      for (const f of [-0.35, 0, 0.35]) {
+        const x = cx + f * (hi - lo);
+        ctx.beginPath();
+        ctx.moveTo(x, y - 20);
+        ctx.lineTo(x, y - 200);
+        ctx.stroke();
+      }
+    } else if (seg.kind === 'light') {
+      // 周りを照らす
+      const g = ctx.createRadialGradient(cx, y, 10, cx, y, 220);
+      g.addColorStop(0, 'rgba(255,240,150,0.45)');
+      g.addColorStop(1, 'rgba(255,240,150,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(cx, y, 220, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (seg.kind === 'robot') {
+      const pr = s.props.get(seg);
+      if (pr) {
+        ctx.fillStyle = '#222';
+        ctx.font = 'bold 14px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(`残り ${Math.ceil(pr.timer)}秒`, cx, y - 22);
+      }
+    }
   }
 }
 

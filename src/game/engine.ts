@@ -21,6 +21,20 @@ const SLOW_MUL = 0.5; // 減速の倍率
 const FLOAT_MAX_FALL = 60; // ふわふわで落下速度がこれを超えないようにする(px/s)
 const CLIMB_MAX = 200; // 横から触れた線のてっぺんが、この高さ以内なら上がれる(px)
 
+// 形の数値(仮)
+const MOVE_AMP = 90; // 動く足場: 左右に動く幅(中心から)
+const MOVE_OMEGA = 1; // 動く足場: 揺れの速さ(rad/s)
+const STOP_TIME = 3; // 赤信号: 止まる時間(秒)
+const ROBOT_TIME = 8; // ロボット: 置いてから敵を倒すまでの時間(秒)
+const ROBOT_RANGE = 200; // ロボット: 倒せる範囲(中心から左右)
+const ELEV_TRAVEL = 180; // エレベーター: 動く距離
+const ELEV_SPEED = 80; // エレベーター: 動く速さ(px/s)
+const FAN_HEIGHT = 220; // 扇風機: 風が届く高さ
+const FAN_LIFT = 2600; // 扇風機: 上向きの力(px/s²)
+const FAN_MAX_UP = 420; // 扇風機: 吹き上げの最大速さ(px/s)
+const FAN_PUSH_X = 60; // 扇風機: 右へ押す速さ(px/s)
+const PAPER_SPEED = 200; // 紙飛行機: 矢印キーで動く速さ(px/s)
+
 const ENEMY_RADIUS = 14;
 const ENEMY_SPEED = 60; // 左右に歩く敵の速さ(px/s)
 const STOMP_BOUNCE = 320; // 敵を踏んだときの跳ね返り速度(px/s)
@@ -37,6 +51,19 @@ const GOAL_RADIUS = 30;
 const STUCK_LIMIT = 2; // 秒: 行き止まりとみなすまでの時間
 const FALL_MARGIN = 200; // ステージ下端からこれだけ落ちたら落下扱い
 
+/** 置いたときに状態(時間・動き)を持つ形。 */
+const NEEDS_PROP = new Set<ShapeKind>(['redlight', 'moving', 'robot', 'elevator']);
+
+/** 置いた形1つ分の動きの状態。 */
+export interface Prop {
+  home: Vec;
+  t: number;
+  timer: number;
+  mode: 'idle' | 'choosing' | 'up' | 'down' | 'done';
+  travel: number;
+  triggered: boolean;
+}
+
 export interface GameState {
   stage: Stage;
   pos: Vec;
@@ -44,6 +71,9 @@ export interface GameState {
   respawn: Vec;
   /** 自由に描いた線と、置いた形の両方。失敗時に全部消える。 */
   lines: Segment[];
+  /** 地面。穴(あな)で削られるので、ステージの地面のコピーを持つ。 */
+  ground: Segment[];
+  props: Map<Segment, Prop>;
   ink: number;
   lives: number;
   starsGot: boolean[];
@@ -56,6 +86,16 @@ export interface GameState {
   stroke: Vec | null;
   /** 直前のステップで主人公が触れている形の種類。 */
   contacts: ShapeKind[];
+  /** 赤信号で止まっている残り時間(秒)。 */
+  stopTimer: number;
+  /** 紙飛行機に乗っているとき、その紙飛行機。 */
+  rideSeg: Segment | null;
+  /** エレベーターに触れて、上か下かを選んでいる最中のエレベーター。 */
+  choice: Segment | null;
+  /** 矢印キーの入力(紙飛行機に乗っているときの移動)。-1〜1。 */
+  input: Vec;
+  /** ゲーム開始からの経過時間(秒)。 */
+  time: number;
   enemies: EnemyState[];
   ally: Body;
   message: string;
@@ -71,6 +111,10 @@ export interface EnemyState {
   pos: Vec;
   dir: 1 | -1;
   defeated: boolean;
+}
+
+function copyGround(segs: Segment[]): Segment[] {
+  return segs.map((seg) => ({ a: { ...seg.a }, b: { ...seg.b } }));
 }
 
 function spawnEnemies(stage: Stage): EnemyState[] {
@@ -96,6 +140,8 @@ export function createState(stage: Stage): GameState {
     ...base,
     vel: { x: 0, y: 0 },
     lines: [],
+    ground: copyGround(stage.ground),
+    props: new Map(),
     ink: INK_START,
     lives: LIVES_START,
     starsGot: stage.stars.map(() => false),
@@ -106,6 +152,11 @@ export function createState(stage: Stage): GameState {
     stuckTime: 0,
     stroke: null,
     contacts: [],
+    stopTimer: 0,
+    rideSeg: null,
+    choice: null,
+    input: { x: 0, y: 0 },
+    time: 0,
     enemies: spawnEnemies(stage),
     ally: { pos: allySpawn(base), vel: { x: 0, y: 0 } },
     message: '',
@@ -144,31 +195,118 @@ export function endStroke(s: GameState): void {
   s.stroke = null;
 }
 
+/** 紙飛行機の矢印キーの入力を設定する。 */
+export function setInput(s: GameState, x: number, y: number): void {
+  s.input = { x, y };
+}
+
+/** エレベーターの行き先を選ぶ。 */
+export function chooseElevator(s: GameState, dir: 'up' | 'down'): void {
+  const seg = s.choice;
+  if (!seg) return;
+  const pr = s.props.get(seg);
+  if (pr) {
+    pr.mode = dir;
+    pr.travel = 0;
+  }
+  s.choice = null;
+}
+
 /** 枠の形を、指定の位置(中心)に置く。墨が足りなければ置けない。 */
 export function placeShape(s: GameState, kind: ShapeKind, at: Vec): boolean {
-  if (s.status !== 'playing' || s.ink < INK_COST_PER_SHAPE) return false;
+  if (s.status !== 'playing' || s.ink < INK_COST_PER_SHAPE || s.choice) return false;
   const half = SHAPE_LENGTH / 2;
-  s.lines.push({
-    a: { x: at.x - half, y: at.y },
-    b: { x: at.x + half, y: at.y },
-    kind,
-  });
+  if (kind === 'hole') {
+    // あなは線にならず、置いた場所の地面を削る
+    s.ground = cutGround(s.ground, at.x - half, at.x + half, at.y);
+  } else {
+    const seg: Segment = {
+      a: { x: at.x - half, y: at.y },
+      b: { x: at.x + half, y: at.y },
+      kind,
+    };
+    s.lines.push(seg);
+    if (NEEDS_PROP.has(kind)) {
+      s.props.set(seg, { home: { ...at }, t: 0, timer: ROBOT_TIME, mode: 'idle', travel: 0, triggered: false });
+    }
+  }
   s.ink -= INK_COST_PER_SHAPE;
   return true;
 }
 
+/** x1〜x2 の範囲の横向きの地面を削る。縦の壁や別の高さの地面は残す。 */
+function cutGround(segs: Segment[], x1: number, x2: number, y: number): Segment[] {
+  const out: Segment[] = [];
+  for (const seg of segs) {
+    const flat = Math.abs(seg.a.y - seg.b.y) < 0.5;
+    const near = Math.abs(seg.a.y - y) < 60;
+    const lo = Math.min(seg.a.x, seg.b.x);
+    const hi = Math.max(seg.a.x, seg.b.x);
+    if (!flat || !near || hi <= x1 || lo >= x2) {
+      out.push(seg);
+      continue;
+    }
+    if (lo < x1) out.push({ a: { x: lo, y: seg.a.y }, b: { x: x1, y: seg.a.y } });
+    if (hi > x2) out.push({ a: { x: x2, y: seg.a.y }, b: { x: hi, y: seg.a.y } });
+  }
+  return out;
+}
+
 /** 1フレーム分の更新。dtは秒。 */
 export function update(s: GameState, dtRaw: number): void {
-  if (s.status !== 'playing' || s.paused) return;
+  if (s.status !== 'playing' || s.paused || s.choice) return;
   const dt = Math.min(dtRaw, 1 / 30);
+  s.time += dt;
+  if (s.stopTimer > 0) s.stopTimer = Math.max(0, s.stopTimer - dt);
+  updateProps(s, dt);
+  if (s.status !== 'playing' || s.choice) return;
+
   const SUBSTEPS = 4;
   for (let i = 0; i < SUBSTEPS; i++) {
     step(s, dt / SUBSTEPS);
-    if (s.status !== 'playing') return;
+    if (s.status !== 'playing' || s.choice) return;
   }
   moveEnemies(s, dt);
   updateAlly(s, dt);
   afterStep(s);
+}
+
+/** 置いた形の動き(動く足場・エレベーター)、赤信号、ロボットを更新する。 */
+function updateProps(s: GameState, dt: number): void {
+  for (const seg of [...s.lines]) {
+    const pr = s.props.get(seg);
+    if (!pr || !seg.kind) continue;
+
+    if (seg.kind === 'redlight') {
+      if (!pr.triggered && inBeam(s, seg)) {
+        pr.triggered = true;
+        s.stopTimer = STOP_TIME;
+        removeSeg(s, seg);
+      }
+    } else if (seg.kind === 'robot') {
+      pr.timer -= dt;
+      if (pr.timer <= 0) {
+        const cx = centerX(seg);
+        for (const e of s.enemies) {
+          if (!e.defeated && Math.abs(e.pos.x - cx) < ROBOT_RANGE) e.defeated = true;
+        }
+        removeSeg(s, seg);
+      }
+    } else if (seg.kind === 'moving') {
+      pr.t += dt;
+      moveSegBy(s, seg, pr.home.x + Math.sin(pr.t * MOVE_OMEGA) * MOVE_AMP - centerX(seg), 0);
+    } else if (seg.kind === 'elevator') {
+      if (pr.mode === 'idle' && distToSeg(s.pos, seg) < PLAYER_RADIUS + 4) {
+        pr.mode = 'choosing';
+        s.choice = seg;
+      } else if (pr.mode === 'up' || pr.mode === 'down') {
+        const d = Math.min(ELEV_SPEED * dt, ELEV_TRAVEL - pr.travel);
+        pr.travel += d;
+        moveSegBy(s, seg, 0, pr.mode === 'up' ? -d : d);
+        if (pr.travel >= ELEV_TRAVEL - 1e-6) pr.mode = 'done';
+      }
+    }
+  }
 }
 
 function moveEnemies(s: GameState, dt: number): void {
@@ -194,7 +332,7 @@ function updateAlly(s: GameState, dt: number): void {
 
   a.vel.y += GRAVITY * dt;
   a.pos.y += a.vel.y * dt;
-  for (const seg of s.stage.ground) resolve(a.pos, a.vel, seg, ALLY_RADIUS);
+  for (const seg of s.ground) resolve(a.pos, a.vel, seg, ALLY_RADIUS);
   for (const seg of s.lines) resolve(a.pos, a.vel, seg, ALLY_RADIUS);
 
   if (a.pos.y > s.stage.height + FALL_MARGIN) {
@@ -230,22 +368,50 @@ function step(s: GameState, dt: number): void {
   const p = s.pos;
   const v = s.vel;
   const prevX = p.x;
+  const prevY = p.y;
+  const riding = s.rideSeg !== null;
+  const stopped = s.stopTimer > 0;
 
-  // 主人公は自動で右へ進む。操作は形を置くことと線を描くこと。
-  // 直前に触れている形で速さが変わる。
+  // 主人公は自動で右へ進む。紙飛行機に乗っているときは矢印キーで自由に動く。
+  // 赤信号で止まっている間は動かない。直前に触れている形で速さが変わる。
   const mul = s.contacts.includes('slow') ? SLOW_MUL : s.contacts.includes('boost') ? BOOST_MUL : 1;
-  v.x = RUN_SPEED * mul;
-  v.y += GRAVITY * dt;
+  if (riding) {
+    // 紙飛行機: 矢印キーで動く。上下キーを離すと重力で一緒に落ちる
+    v.x = s.input.x * PAPER_SPEED;
+    if (s.input.y !== 0) v.y = s.input.y * PAPER_SPEED;
+    else v.y += GRAVITY * dt;
+  } else {
+    v.x = stopped ? 0 : RUN_SPEED * mul;
+    v.y += GRAVITY * dt;
+  }
   p.x += v.x * dt;
   p.y += v.y * dt;
 
-  for (const seg of s.stage.ground) {
+  // 扇風機の風に当たると吹き上げられる
+  for (const seg of s.lines) {
+    if (seg.kind !== 'fan') continue;
+    const lo = Math.min(seg.a.x, seg.b.x);
+    const hi = Math.max(seg.a.x, seg.b.x);
+    if (p.x >= lo && p.x <= hi && p.y < seg.a.y - 4 && p.y > seg.a.y - FAN_HEIGHT) {
+      v.y = Math.max(-FAN_MAX_UP, v.y - FAN_LIFT * dt);
+      p.x += FAN_PUSH_X * dt;
+    }
+  }
+
+  // 紙飛行機に乗せたまま動かすのは、主人公が自分で動いた分だけ(地面や線に押し戻された分は含めない)
+  const moveX = p.x - prevX;
+  const moveY = p.y - prevY;
+
+  for (const seg of s.ground) {
     const n = resolve(p, v, seg);
     if (n) climbTop(p, v, seg, n);
   }
 
   const contacts: ShapeKind[] = [];
+  let rideNext: Segment | null = null;
   for (const seg of s.lines) {
+    // 乗っている紙飛行機とは衝突で押し合わない(位置を一緒に動かすので、ずれないようにする)
+    if (seg === s.rideSeg) continue;
     const n = resolve(p, v, seg);
     if (!n) continue;
     climbTop(p, v, seg, n);
@@ -254,11 +420,21 @@ function step(s: GameState, dt: number): void {
     // ジャンプ台は上から乗ったときだけ跳ね上げる
     if (seg.kind === 'jump' && n.y < -0.5) v.y = -JUMP_SPEED;
   }
+  // 紙飛行機は、主人公がその真上にいる間は乗っている(接触の境界で判定が揺れないように位置で判定する)
+  for (const seg of s.lines) {
+    if (seg.kind === 'paper' && onTop(p, seg)) rideNext = seg;
+  }
   s.contacts = contacts;
+  s.rideSeg = rideNext;
+  // 紙飛行機は乗っている主人公と一緒に動く
+  if (rideNext) shiftSeg(rideNext, moveX, moveY);
+
   if (contacts.includes('float') && v.y > FLOAT_MAX_FALL) v.y = FLOAT_MAX_FALL;
 
   const moved = p.x - prevX;
-  if (moved < RUN_SPEED * dt * 0.3) {
+  if (stopped || riding) {
+    s.stuckTime = 0;
+  } else if (moved < RUN_SPEED * dt * 0.3) {
     s.stuckTime += dt;
     if (s.stuckTime > STUCK_LIMIT) loseLife(s, '行き止まりになりました');
   } else {
@@ -306,10 +482,15 @@ function loseLife(s: GameState, reason: string): void {
   s.message = reason;
   // 仕様: 失敗したら描いた線と置いた形を全部消し、墨を満タン(200)に戻す
   s.lines = [];
+  s.props = new Map();
+  s.ground = copyGround(s.stage.ground);
   s.ink = INK_START;
   // 墨のアイテムも復活させる(墨が満タンに戻るため、再び拾えるようにする)
   s.pickupsGot = s.stage.inkPickups.map(() => false);
   s.contacts = [];
+  s.stopTimer = 0;
+  s.rideSeg = null;
+  s.choice = null;
   // 倒した敵は元の位置に戻る
   s.enemies = spawnEnemies(s.stage);
   if (s.lives <= 0) {
@@ -342,25 +523,16 @@ function climbTop(p: Vec, v: Vec, seg: Segment, n: Vec): void {
  * 接触したら法線(線から円へ向かう単位ベクトル)を返し、接触しなければ null を返す。
  */
 function resolve(p: Vec, v: Vec, seg: Segment, radius = PLAYER_RADIUS): Vec | null {
-  const ax = seg.a.x;
-  const ay = seg.a.y;
-  const bx = seg.b.x - ax;
-  const by = seg.b.y - ay;
-  const len2 = bx * bx + by * by;
-  let t = len2 === 0 ? 0 : ((p.x - ax) * bx + (p.y - ay) * by) / len2;
-  t = Math.max(0, Math.min(1, t));
-  const cx = ax + bx * t;
-  const cy = ay + by * t;
-
-  const dx = p.x - cx;
-  const dy = p.y - cy;
+  const c = closestOnSeg(p, seg);
+  const dx = p.x - c.x;
+  const dy = p.y - c.y;
   const d = Math.hypot(dx, dy);
   if (d >= radius) return null;
 
   const nx = d < 1e-6 ? 0 : dx / d;
   const ny = d < 1e-6 ? -1 : dy / d;
-  p.x = cx + nx * radius;
-  p.y = cy + ny * radius;
+  p.x = c.x + nx * radius;
+  p.y = c.y + ny * radius;
 
   const vn = v.x * nx + v.y * ny;
   if (vn < 0) {
@@ -368,6 +540,63 @@ function resolve(p: Vec, v: Vec, seg: Segment, radius = PLAYER_RADIUS): Vec | nu
     v.y -= vn * ny;
   }
   return { x: nx, y: ny };
+}
+
+/** 点から線分上の最も近い点。 */
+function closestOnSeg(p: Vec, seg: Segment): Vec {
+  const ax = seg.a.x;
+  const ay = seg.a.y;
+  const bx = seg.b.x - ax;
+  const by = seg.b.y - ay;
+  const len2 = bx * bx + by * by;
+  let t = len2 === 0 ? 0 : ((p.x - ax) * bx + (p.y - ay) * by) / len2;
+  t = Math.max(0, Math.min(1, t));
+  return { x: ax + bx * t, y: ay + by * t };
+}
+
+function distToSeg(p: Vec, seg: Segment): number {
+  const c = closestOnSeg(p, seg);
+  return Math.hypot(p.x - c.x, p.y - c.y);
+}
+
+function centerX(seg: Segment): number {
+  return (seg.a.x + seg.b.x) / 2;
+}
+
+/** 主人公が線の上に立っているか(線が動くと一緒に運ばれるかの判定)。 */
+function onTop(p: Vec, seg: Segment): boolean {
+  const lo = Math.min(seg.a.x, seg.b.x) - PLAYER_RADIUS;
+  const hi = Math.max(seg.a.x, seg.b.x) + PLAYER_RADIUS;
+  return p.x >= lo && p.x <= hi && Math.abs(p.y - (seg.a.y - PLAYER_RADIUS)) < 6;
+}
+
+/** 線を動かす。主人公がその上に立っていれば一緒に動かす。 */
+function moveSegBy(s: GameState, seg: Segment, dx: number, dy: number): void {
+  const carry = onTop(s.pos, seg);
+  shiftSeg(seg, dx, dy);
+  if (carry) {
+    s.pos.x += dx;
+    s.pos.y += dy;
+  }
+}
+
+function shiftSeg(seg: Segment, dx: number, dy: number): void {
+  seg.a.x += dx;
+  seg.a.y += dy;
+  seg.b.x += dx;
+  seg.b.y += dy;
+}
+
+/** 赤信号の光の範囲(線の右側、1個分)に主人公がいるか。 */
+function inBeam(s: GameState, seg: Segment): boolean {
+  const hi = Math.max(seg.a.x, seg.b.x);
+  const p = s.pos;
+  return p.x >= hi && p.x <= hi + SHAPE_LENGTH && p.y >= seg.a.y - 40 && p.y <= seg.a.y + 4;
+}
+
+function removeSeg(s: GameState, seg: Segment): void {
+  s.lines = s.lines.filter((l) => l !== seg);
+  s.props.delete(seg);
 }
 
 function dist(a: Vec, b: Vec): number {

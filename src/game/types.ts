@@ -4,7 +4,20 @@ export interface Vec {
 }
 
 /** 枠に入れて置ける形の種類(能力つき)。 */
-export type ShapeKind = 'foothold' | 'jump' | 'boost' | 'slow' | 'float';
+export type ShapeKind =
+  | 'foothold'
+  | 'jump'
+  | 'boost'
+  | 'slow'
+  | 'float'
+  | 'redlight'
+  | 'moving'
+  | 'robot'
+  | 'hole'
+  | 'elevator'
+  | 'fan'
+  | 'paper'
+  | 'light';
 
 export interface Segment {
   a: Vec;

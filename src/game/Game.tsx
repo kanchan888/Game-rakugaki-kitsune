@@ -2,16 +2,19 @@ import { useEffect, useRef, useState } from 'react';
 import {
   beginStroke,
   cameraX,
+  chooseElevator,
   createState,
   endStroke,
   extendStroke,
   placeShape,
   SCREEN_H,
   SCREEN_W,
+  setInput,
   update,
   type GameState,
 } from './engine';
 import { SHAPE_INFO } from './shapes';
+import { ShapeIcon } from './ShapeIcon';
 import { draw } from './render';
 import type { ShapeKind, Stage, Vec } from './types';
 
@@ -39,6 +42,7 @@ export function Game({ stage, frames, onExit }: Props) {
   const [message, setMessage] = useState('');
   const [selected, setSelected] = useState<number | null>(null);
   const [paused, setPaused] = useState(false);
+  const [choosing, setChoosing] = useState(false);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -50,6 +54,7 @@ export function Game({ stage, frames, onExit }: Props) {
     let last = performance.now();
     let lastStatus: Status = 'playing';
     let lastMessage = '';
+    let lastChoosing = false;
 
     const loop = (now: number) => {
       const dt = (now - last) / 1000;
@@ -60,6 +65,11 @@ export function Game({ stage, frames, onExit }: Props) {
       if (s.status !== lastStatus) {
         lastStatus = s.status;
         setStatus(s.status);
+      }
+      const isChoosing = s.choice !== null;
+      if (isChoosing !== lastChoosing) {
+        lastChoosing = isChoosing;
+        setChoosing(isChoosing);
       }
       if (s.message !== lastMessage) {
         lastMessage = s.message;
@@ -128,12 +138,25 @@ export function Game({ stage, frames, onExit }: Props) {
     endStroke(s);
   };
 
-  // 数字キー 1〜(枠の数) で枠を選ぶ
+  // 数字キー 1〜(枠の数) で枠を選ぶ。矢印キー(WASD)は紙飛行機に乗っているときの移動に使う
   useEffect(() => {
+    const held = new Set<string>();
+    const syncInput = () => {
+      const x = (held.has('ArrowRight') || held.has('d') || held.has('D') ? 1 : 0) - (held.has('ArrowLeft') || held.has('a') || held.has('A') ? 1 : 0);
+      const y = (held.has('ArrowDown') || held.has('s') || held.has('S') ? 1 : 0) - (held.has('ArrowUp') || held.has('w') || held.has('W') ? 1 : 0);
+      setInput(stateRef.current, x, y);
+    };
+    const arrows = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
     const onKey = (e: KeyboardEvent) => {
       // E/Esc で一時停止(ボタンにフォーカスがあっても効くようにする)
       if (e.key === 'Escape' || e.key === 'e' || e.key === 'E') {
         togglePause();
+        return;
+      }
+      if (arrows.includes(e.key) || 'wasdWASD'.includes(e.key)) {
+        if (arrows.includes(e.key)) e.preventDefault();
+        held.add(e.key);
+        syncInput();
         return;
       }
       if (stateRef.current.paused) return;
@@ -144,8 +167,16 @@ export function Game({ stage, frames, onExit }: Props) {
       selectedRef.current = next;
       setSelected(next);
     };
+    const onKeyUp = (e: KeyboardEvent) => {
+      held.delete(e.key);
+      syncInput();
+    };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener('keyup', onKeyUp);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('keyup', onKeyUp);
+    };
   }, []);
 
   const restart = () => {
@@ -173,6 +204,39 @@ export function Game({ stage, frames, onExit }: Props) {
           height={SCREEN_H}
           style={{ width: '100%', height: 'auto', display: 'block', touchAction: 'none', borderRadius: 8 }}
         />
+        {status === 'playing' && choosing && !paused && (
+          <div
+            style={{
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              bottom: 16,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 8,
+              pointerEvents: 'none',
+            }}
+          >
+            <div style={{ background: 'rgba(0,0,0,0.6)', color: '#fff', padding: '8px 14px', borderRadius: 8 }}>
+              エレベーターに乗りました。行き先を選んでください
+            </div>
+            <div style={{ display: 'flex', gap: 12, pointerEvents: 'auto' }}>
+              <button
+                onClick={() => chooseElevator(stateRef.current, 'up')}
+                style={{ padding: '8px 20px', fontSize: 16, cursor: 'pointer' }}
+              >
+                ↑ 上へ
+              </button>
+              <button
+                onClick={() => chooseElevator(stateRef.current, 'down')}
+                style={{ padding: '8px 20px', fontSize: 16, cursor: 'pointer' }}
+              >
+                ↓ 下へ
+              </button>
+            </div>
+          </div>
+        )}
         {status === 'playing' && paused && (
           <div
             style={{
@@ -257,6 +321,7 @@ export function Game({ stage, frames, onExit }: Props) {
               fontWeight: 'bold',
             }}
           >
+            {kind && <ShapeIcon kind={kind} size={20} color="#fff" />}
             {i + 1}. {kind ? SHAPE_INFO[kind].label : '空'}
           </button>
         ))}
