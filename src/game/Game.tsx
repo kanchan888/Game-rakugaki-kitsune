@@ -30,9 +30,11 @@ export function Game({ frames, onExit }: Props) {
   const stateRef = useRef<GameState>(createState(stage01));
   const selectedRef = useRef<number | null>(null);
   const framesRef = useRef(frames);
+  const pausedRef = useRef(false);
   const [status, setStatus] = useState<Status>('playing');
   const [message, setMessage] = useState('');
   const [selected, setSelected] = useState<number | null>(null);
+  const [paused, setPaused] = useState(false);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -49,7 +51,7 @@ export function Game({ frames, onExit }: Props) {
       const dt = (now - last) / 1000;
       last = now;
       const s = stateRef.current;
-      update(s, dt);
+      if (!pausedRef.current) update(s, dt);
       draw(ctx, s);
       if (s.status !== lastStatus) {
         lastStatus = s.status;
@@ -73,6 +75,7 @@ export function Game({ frames, onExit }: Props) {
     // 枠を選んでいるときは、クリックした位置に形を置く。選んでいないときは線を描く。
     let drawing = false;
     const onDown = (e: PointerEvent) => {
+      if (pausedRef.current) return;
       const s = stateRef.current;
       const sel = selectedRef.current;
       const kind = sel !== null ? framesRef.current[sel] : null;
@@ -112,9 +115,23 @@ export function Game({ frames, onExit }: Props) {
     setSelected(next);
   };
 
+  // 一時停止: P キーか Esc キー。停止中は数字キーの枠選択も止める
+  const togglePause = () => {
+    if (stateRef.current.status !== 'playing') return;
+    const next = !pausedRef.current;
+    pausedRef.current = next;
+    setPaused(next);
+    endStroke(stateRef.current);
+  };
+
   // 数字キー 1〜(枠の数) で枠を選ぶ
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'p' || e.key === 'P' || e.key === 'Escape') {
+        togglePause();
+        return;
+      }
+      if (pausedRef.current) return;
       const n = Number(e.key);
       if (!Number.isInteger(n) || n < 1 || n > framesRef.current.length) return;
       const i = n - 1;
@@ -128,6 +145,8 @@ export function Game({ frames, onExit }: Props) {
 
   const restart = () => {
     stateRef.current = createState(stage01);
+    pausedRef.current = false;
+    setPaused(false);
     setStatus('playing');
     setMessage('');
   };
@@ -136,6 +155,13 @@ export function Game({ frames, onExit }: Props) {
 
   return (
     <div style={{ width: '100%', maxWidth: SCREEN_W, margin: '0 auto' }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 6 }}>
+        {status === 'playing' && (
+          <button onClick={togglePause} style={{ padding: '6px 14px', fontSize: 14, cursor: 'pointer' }}>
+            {paused ? '再開(P)' : '一時停止(P)'}
+          </button>
+        )}
+      </div>
       <div style={{ position: 'relative' }}>
         <canvas
           ref={canvasRef}
@@ -143,6 +169,35 @@ export function Game({ frames, onExit }: Props) {
           height={SCREEN_H}
           style={{ width: '100%', height: 'auto', display: 'block', touchAction: 'none', borderRadius: 8 }}
         />
+        {status === 'playing' && paused && (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'rgba(0,0,0,0.4)',
+              color: '#fff',
+              borderRadius: 8,
+              gap: 12,
+            }}
+          >
+            <div style={{ fontSize: 28, fontWeight: 'bold' }}>一時停止中</div>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button onClick={togglePause} style={{ padding: '8px 20px', fontSize: 16, cursor: 'pointer' }}>
+                再開
+              </button>
+              <button
+                onClick={() => onExit(0)}
+                style={{ padding: '8px 20px', fontSize: 16, cursor: 'pointer' }}
+              >
+                ロビーへ(この面は中断)
+              </button>
+            </div>
+          </div>
+        )}
         {status !== 'playing' && (
           <div
             style={{
