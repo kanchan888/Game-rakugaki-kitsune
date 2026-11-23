@@ -21,4 +21,9 @@ export const stage01: Stage = {
     { x: 1100, y: 240 },
     { x: 1700, y: 360 },
   ],
+  enemies: [
+    { x: 250, y: 486, minX: 80, maxX: 380 },
+    { x: 800, y: 486, minX: 640, maxX: 960 },
+    { x: 1700, y: 406, minX: 1440, maxX: 1960 },
+  ],
 };

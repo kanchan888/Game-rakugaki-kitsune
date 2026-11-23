@@ -1,5 +1,5 @@
 import { INK_COST_PER_SHAPE, SHAPE_LENGTH } from './shapes';
-import type { Segment, ShapeKind, Stage, Vec } from './types';
+import type { EnemySpec, Segment, ShapeKind, Stage, Vec } from './types';
 
 export const SCREEN_W = 960;
 export const SCREEN_H = 540;
@@ -19,6 +19,15 @@ const JUMP_SPEED = 620; // ジャンプ台の跳ね上がり速度(px/s)
 const BOOST_MUL = 1.8; // 加速の倍率
 const SLOW_MUL = 0.5; // 減速の倍率
 const FLOAT_MAX_FALL = 60; // ふわふわで落下速度がこれを超えないようにする(px/s)
+
+const ENEMY_RADIUS = 14;
+const ENEMY_SPEED = 60; // 左右に歩く敵の速さ(px/s)
+const STOMP_BOUNCE = 320; // 敵を踏んだときの跳ね返り速度(px/s)
+
+const ALLY_RADIUS = 10;
+const ALLY_OFFSET = 70; // 味方は主人公の後ろこれだけ離れてついてくる
+const ALLY_RANGE = 140; // この距離以内にいると墨が回復する
+const ALLY_INK_RATE = 8; // 墨の回復量(/秒)。仮
 
 const MIN_STROKE_STEP = 4; // これ未満の移動では線を伸ばさない
 const PICKUP_RADIUS = 18;
@@ -44,15 +53,45 @@ export interface GameState {
   stroke: Vec | null;
   /** 直前のステップで主人公が触れている形の種類。 */
   contacts: ShapeKind[];
+  enemies: EnemyState[];
+  ally: Body;
   message: string;
 }
 
+export interface Body {
+  pos: Vec;
+  vel: Vec;
+}
+
+export interface EnemyState {
+  spec: EnemySpec;
+  pos: Vec;
+  dir: 1 | -1;
+  defeated: boolean;
+}
+
+function spawnEnemies(stage: Stage): EnemyState[] {
+  return stage.enemies.map((spec) => ({
+    spec,
+    pos: { x: spec.x, y: spec.y },
+    dir: 1,
+    defeated: false,
+  }));
+}
+
+function allySpawn(s: { respawn: Vec }): Vec {
+  return { x: s.respawn.x - ALLY_OFFSET, y: s.respawn.y };
+}
+
 export function createState(stage: Stage): GameState {
-  return {
+  const base = {
     stage,
     pos: { ...stage.start },
-    vel: { x: 0, y: 0 },
     respawn: { ...stage.start },
+  };
+  return {
+    ...base,
+    vel: { x: 0, y: 0 },
     lines: [],
     ink: INK_START,
     lives: LIVES_START,
@@ -63,6 +102,8 @@ export function createState(stage: Stage): GameState {
     stuckTime: 0,
     stroke: null,
     contacts: [],
+    enemies: spawnEnemies(stage),
+    ally: { pos: allySpawn(base), vel: { x: 0, y: 0 } },
     message: '',
   };
 }
@@ -121,7 +162,64 @@ export function update(s: GameState, dtRaw: number): void {
     step(s, dt / SUBSTEPS);
     if (s.status !== 'playing') return;
   }
+  moveEnemies(s, dt);
+  updateAlly(s, dt);
   afterStep(s);
+}
+
+function moveEnemies(s: GameState, dt: number): void {
+  for (const e of s.enemies) {
+    if (e.defeated) continue;
+    e.pos.x += e.dir * ENEMY_SPEED * dt;
+    if (e.pos.x <= e.spec.minX) {
+      e.pos.x = e.spec.minX;
+      e.dir = 1;
+    } else if (e.pos.x >= e.spec.maxX) {
+      e.pos.x = e.spec.maxX;
+      e.dir = -1;
+    }
+  }
+}
+
+/** 味方は主人公の後ろについてきて、近くにいる間は墨を回復する。 */
+function updateAlly(s: GameState, dt: number): void {
+  const a = s.ally;
+  const target = s.pos.x - ALLY_OFFSET;
+  const maxStep = RUN_SPEED * 1.1 * dt;
+  a.pos.x += Math.max(-maxStep, Math.min(maxStep, target - a.pos.x));
+
+  a.vel.y += GRAVITY * dt;
+  a.pos.y += a.vel.y * dt;
+  for (const seg of s.stage.ground) resolve(a.pos, a.vel, seg, ALLY_RADIUS);
+  for (const seg of s.lines) resolve(a.pos, a.vel, seg, ALLY_RADIUS);
+
+  if (a.pos.y > s.stage.height + FALL_MARGIN) {
+    a.pos = { x: target, y: s.pos.y - 40 };
+    a.vel = { x: 0, y: 0 };
+  }
+
+  if (s.status === 'playing' && dist(a.pos, s.pos) < ALLY_RANGE) {
+    s.ink = Math.min(INK_MAX, s.ink + ALLY_INK_RATE * dt);
+  }
+}
+
+/** 敵との接触。上から踏めば倒せる。横からぶつかると残機が減る。 */
+function checkEnemies(s: GameState): void {
+  for (const e of s.enemies) {
+    if (e.defeated) continue;
+    const dx = Math.abs(s.pos.x - e.pos.x);
+    const dy = s.pos.y - e.pos.y;
+    if (dx >= PLAYER_RADIUS + ENEMY_RADIUS - 4) continue;
+    if (dy <= -(PLAYER_RADIUS + ENEMY_RADIUS) || dy >= PLAYER_RADIUS + ENEMY_RADIUS) continue;
+
+    if (s.vel.y >= 0 && dy < -4) {
+      e.defeated = true;
+      s.vel.y = -STOMP_BOUNCE;
+    } else {
+      loseLife(s, '敵にぶつかりました');
+      return;
+    }
+  }
 }
 
 function step(s: GameState, dt: number): void {
@@ -167,6 +265,9 @@ function afterStep(s: GameState): void {
     return;
   }
 
+  checkEnemies(s);
+  if (s.status !== 'playing') return;
+
   for (const cp of stage.checkpoints) {
     if (pos.x >= cp.x && cp.x > s.respawn.x) s.respawn = { ...cp };
   }
@@ -200,6 +301,8 @@ function loseLife(s: GameState, reason: string): void {
   // 墨のアイテムも復活させる(墨が満タンに戻るため、再び拾えるようにする)
   s.pickupsGot = s.stage.inkPickups.map(() => false);
   s.contacts = [];
+  // 倒した敵は元の位置に戻る
+  s.enemies = spawnEnemies(s.stage);
   if (s.lives <= 0) {
     s.status = 'gameover';
     return;
@@ -208,13 +311,14 @@ function loseLife(s: GameState, reason: string): void {
   s.vel = { x: 0, y: 0 };
   s.stuckTime = 0;
   s.stroke = null;
+  s.ally = { pos: allySpawn(s), vel: { x: 0, y: 0 } };
 }
 
 /**
  * 円(主人公)と線分の衝突を解決する。接触方向の速度は消す。
  * 接触したら法線のy成分(上から乗ると負)を返し、接触しなければ null を返す。
  */
-function resolve(p: Vec, v: Vec, seg: Segment): number | null {
+function resolve(p: Vec, v: Vec, seg: Segment, radius = PLAYER_RADIUS): number | null {
   const ax = seg.a.x;
   const ay = seg.a.y;
   const bx = seg.b.x - ax;
@@ -228,12 +332,12 @@ function resolve(p: Vec, v: Vec, seg: Segment): number | null {
   const dx = p.x - cx;
   const dy = p.y - cy;
   const d = Math.hypot(dx, dy);
-  if (d >= PLAYER_RADIUS) return null;
+  if (d >= radius) return null;
 
   const nx = d < 1e-6 ? 0 : dx / d;
   const ny = d < 1e-6 ? -1 : dy / d;
-  p.x = cx + nx * PLAYER_RADIUS;
-  p.y = cy + ny * PLAYER_RADIUS;
+  p.x = cx + nx * radius;
+  p.y = cy + ny * radius;
 
   const vn = v.x * nx + v.y * ny;
   if (vn < 0) {

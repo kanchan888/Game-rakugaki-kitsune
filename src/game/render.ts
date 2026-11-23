@@ -24,6 +24,10 @@ export function draw(ctx: CanvasRenderingContext2D, s: GameState): void {
     if (!s.starsGot[i]) drawStar(ctx, p, 16, '#f5b700');
   });
 
+  for (const e of s.enemies) {
+    if (!e.defeated) drawEnemy(ctx, e.pos);
+  }
+  drawAlly(ctx, s.ally.pos);
   drawPlayer(ctx, s.pos);
 
   ctx.restore();
@@ -60,6 +64,30 @@ function drawShapes(ctx: CanvasRenderingContext2D, segs: Segment[]): void {
     ctx.textBaseline = 'bottom';
     ctx.fillText(info.label, (seg.a.x + seg.b.x) / 2, Math.min(seg.a.y, seg.b.y) - 6);
   }
+}
+
+function drawEnemy(ctx: CanvasRenderingContext2D, p: Vec): void {
+  ctx.fillStyle = '#c62828';
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, 14, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(p.x - 5, p.y - 3, 3, 0, Math.PI * 2);
+  ctx.arc(p.x + 5, p.y - 3, 3, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawAlly(ctx: CanvasRenderingContext2D, p: Vec): void {
+  ctx.fillStyle = '#26a69a';
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, 10, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 10px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('味', p.x, p.y + 1);
 }
 
 function drawPlayer(ctx: CanvasRenderingContext2D, p: Vec): void {

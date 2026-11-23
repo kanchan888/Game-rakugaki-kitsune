@@ -13,6 +13,14 @@ export interface Segment {
   kind?: ShapeKind;
 }
 
+/** 左右に歩く敵の配置。minX〜maxX の間を往復する。 */
+export interface EnemySpec {
+  x: number;
+  y: number;
+  minX: number;
+  maxX: number;
+}
+
 export interface Stage {
   name: string;
   width: number;
@@ -23,4 +31,5 @@ export interface Stage {
   ground: Segment[];
   inkPickups: Vec[];
   stars: Vec[];
+  enemies: EnemySpec[];
 }
