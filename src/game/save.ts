@@ -11,10 +11,11 @@ export interface SaveData {
 }
 
 const KEY = 'rakugaki-kitsune-save-v1';
+const START_COINS = 100; // 最初に配るコイン(仮)
 
 export function defaultSave(): SaveData {
   return {
-    coins: 0,
+    coins: START_COINS,
     inventory: { foothold: 0, jump: 0, boost: 0, slow: 0, float: 0 },
     frameCount: FRAME_START,
     frames: Array.from({ length: FRAME_START }, () => null),
@@ -37,8 +38,15 @@ export function loadSave(): SaveData {
       const f = d.frames?.[i];
       return SHAPE_KINDS.includes(f as ShapeKind) ? (f as ShapeKind) : null;
     });
+    const coins = Math.max(0, Math.floor(Number(d.coins) || 0));
+    const isEmpty =
+      coins === 0 &&
+      SHAPE_KINDS.every((k) => inventory[k] === 0) &&
+      frameCount === FRAME_START &&
+      frames.every((f) => f === null);
+    // 以前の版で保存された「空の状態」にも、最初のコインを配る
     return {
-      coins: Math.max(0, Math.floor(Number(d.coins) || 0)),
+      coins: isEmpty ? START_COINS : coins,
       inventory,
       frameCount,
       frames,
