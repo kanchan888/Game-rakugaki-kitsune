@@ -18,9 +18,9 @@ export const stage02: Stage = {
   ],
   inkPickups: [{ x: 700, y: 460 }],
   stars: [
-    { x: 445, y: 440 },
-    { x: 1045, y: 380 },
-    { x: 1600, y: 440 },
+    { x: 445, y: 462 },
+    { x: 1045, y: 384 },
+    { x: 1600, y: 462 },
   ],
   enemies: [],
 };

@@ -21,6 +21,13 @@ export interface EnemySpec {
   maxX: number;
 }
 
+/** ステージ上に出す説明書き(チュートリアル用)。text の改行は \n で書く。 */
+export interface Hint {
+  x: number;
+  y: number;
+  text: string;
+}
+
 export interface Stage {
   name: string;
   width: number;
@@ -32,4 +39,5 @@ export interface Stage {
   inkPickups: Vec[];
   stars: Vec[];
   enemies: EnemySpec[];
+  hints?: Hint[];
 }

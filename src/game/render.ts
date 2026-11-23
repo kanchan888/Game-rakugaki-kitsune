@@ -1,6 +1,6 @@
 import { PLAYER_RADIUS, SCREEN_H, SCREEN_W, INK_START, cameraX, type GameState } from './engine';
 import { SHAPE_INFO } from './shapes';
-import type { Segment, Vec } from './types';
+import type { Hint, Segment, Vec } from './types';
 
 export function draw(ctx: CanvasRenderingContext2D, s: GameState): void {
   const cam = cameraX(s);
@@ -29,6 +29,7 @@ export function draw(ctx: CanvasRenderingContext2D, s: GameState): void {
   }
   drawAlly(ctx, s.ally.pos);
   drawPlayer(ctx, s.pos);
+  drawHints(ctx, s.stage.hints ?? []);
 
   ctx.restore();
 
@@ -155,6 +156,27 @@ function drawStar(ctx: CanvasRenderingContext2D, c: Vec, r: number, color: strin
   }
   ctx.closePath();
   ctx.fill();
+}
+
+function drawHints(ctx: CanvasRenderingContext2D, hints: Hint[]): void {
+  ctx.font = 'bold 14px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  for (const h of hints) {
+    const lines = h.text.split('\n');
+    const lineH = 20;
+    const width = Math.max(...lines.map((l) => ctx.measureText(l).width)) + 20;
+    const height = lines.length * lineH + 10;
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.strokeStyle = '#1f6feb';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.roundRect(h.x - width / 2, h.y - height / 2, width, height, 8);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#222';
+    lines.forEach((l, i) => ctx.fillText(l, h.x, h.y - ((lines.length - 1) * lineH) / 2 + i * lineH));
+  }
 }
 
 function drawHud(ctx: CanvasRenderingContext2D, s: GameState): void {
