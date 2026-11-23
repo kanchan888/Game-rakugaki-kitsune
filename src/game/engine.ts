@@ -19,6 +19,7 @@ const JUMP_SPEED = 620; // ジャンプ台の跳ね上がり速度(px/s)
 const BOOST_MUL = 1.8; // 加速の倍率
 const SLOW_MUL = 0.5; // 減速の倍率
 const FLOAT_MAX_FALL = 60; // ふわふわで落下速度がこれを超えないようにする(px/s)
+const CLIMB_MAX = 200; // 横から触れた線のてっぺんが、この高さ以内なら上がれる(px)
 
 const ENEMY_RADIUS = 14;
 const ENEMY_SPEED = 60; // 左右に歩く敵の速さ(px/s)
@@ -235,15 +236,20 @@ function step(s: GameState, dt: number): void {
   p.x += v.x * dt;
   p.y += v.y * dt;
 
-  for (const seg of s.stage.ground) resolve(p, v, seg);
+  for (const seg of s.stage.ground) {
+    const n = resolve(p, v, seg);
+    if (n) climbTop(p, v, seg, n);
+  }
 
   const contacts: ShapeKind[] = [];
   for (const seg of s.lines) {
-    const ny = resolve(p, v, seg);
-    if (ny === null || !seg.kind) continue;
+    const n = resolve(p, v, seg);
+    if (!n) continue;
+    climbTop(p, v, seg, n);
+    if (!seg.kind) continue;
     contacts.push(seg.kind);
     // ジャンプ台は上から乗ったときだけ跳ね上げる
-    if (seg.kind === 'jump' && ny < -0.5) v.y = -JUMP_SPEED;
+    if (seg.kind === 'jump' && n.y < -0.5) v.y = -JUMP_SPEED;
   }
   s.contacts = contacts;
   if (contacts.includes('float') && v.y > FLOAT_MAX_FALL) v.y = FLOAT_MAX_FALL;
@@ -315,10 +321,24 @@ function loseLife(s: GameState, reason: string): void {
 }
 
 /**
- * 円(主人公)と線分の衝突を解決する。接触方向の速度は消す。
- * 接触したら法線のy成分(上から乗ると負)を返し、接触しなければ null を返す。
+ * 横から線に触れたとき、その線のてっぺんへ上がる。
+ * てっぺんが主人公より CLIMB_MAX 以内の高さにあるときだけ。
  */
-function resolve(p: Vec, v: Vec, seg: Segment, radius = PLAYER_RADIUS): number | null {
+function climbTop(p: Vec, v: Vec, seg: Segment, n: Vec): void {
+  if (Math.abs(n.x) < 0.5) return; // 横からの接触だけを対象にする
+  const top = seg.a.y <= seg.b.y ? seg.a : seg.b;
+  if (top.y >= p.y - 4) return; // てっぺんが主人公より上にない
+  if (p.y - top.y > CLIMB_MAX) return; // 高すぎる線は上がれない
+  p.x = top.x + Math.sign(n.x) * PLAYER_RADIUS;
+  p.y = top.y - PLAYER_RADIUS;
+  v.y = 0;
+}
+
+/**
+ * 円(主人公)と線分の衝突を解決する。接触方向の速度は消す。
+ * 接触したら法線(線から円へ向かう単位ベクトル)を返し、接触しなければ null を返す。
+ */
+function resolve(p: Vec, v: Vec, seg: Segment, radius = PLAYER_RADIUS): Vec | null {
   const ax = seg.a.x;
   const ay = seg.a.y;
   const bx = seg.b.x - ax;
@@ -344,7 +364,7 @@ function resolve(p: Vec, v: Vec, seg: Segment, radius = PLAYER_RADIUS): number |
     v.x -= vn * nx;
     v.y -= vn * ny;
   }
-  return ny;
+  return { x: nx, y: ny };
 }
 
 function dist(a: Vec, b: Vec): number {
