@@ -38,15 +38,8 @@ export function loadSave(): SaveData {
       const f = d.frames?.[i];
       return SHAPE_KINDS.includes(f as ShapeKind) ? (f as ShapeKind) : null;
     });
-    const coins = Math.max(0, Math.floor(Number(d.coins) || 0));
-    const isEmpty =
-      coins === 0 &&
-      SHAPE_KINDS.every((k) => inventory[k] === 0) &&
-      frameCount === FRAME_START &&
-      frames.every((f) => f === null);
-    // 以前の版で保存された「空の状態」にも、最初のコインを配る
     return {
-      coins: isEmpty ? START_COINS : coins,
+      coins: Math.max(0, Math.floor(Number(d.coins) || 0)),
       inventory,
       frameCount,
       frames,
