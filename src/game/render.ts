@@ -29,9 +29,11 @@ export function draw(ctx: CanvasRenderingContext2D, s: GameState): void {
   }
   drawAlly(ctx, s.ally.pos);
   drawPlayer(ctx, s.pos);
-  drawHints(ctx, s.stage.hints ?? []);
+  drawHints(ctx, s);
 
   ctx.restore();
+
+  drawBanner(ctx, s);
 
   drawHud(ctx, s);
 }
@@ -158,11 +160,74 @@ function drawStar(ctx: CanvasRenderingContext2D, c: Vec, r: number, color: strin
   ctx.fill();
 }
 
-function drawHints(ctx: CanvasRenderingContext2D, hints: Hint[]): void {
+/** 近くの操作案内(prompt)と、常時表示の吹き出し(note)をワールド座標に描く。 */
+function drawHints(ctx: CanvasRenderingContext2D, s: GameState): void {
+  for (const h of s.stage.hints ?? []) {
+    if (h.kind === 'banner') continue;
+    if (h.kind === 'prompt') {
+      if (Math.abs(s.pos.x - h.x) < 200) drawPrompt(ctx, h);
+      continue;
+    }
+    drawNote(ctx, h);
+  }
+}
+
+/** 画面上部の大きな目標表示。キツネが通過した最後の banner を出す。 */
+function drawBanner(ctx: CanvasRenderingContext2D, s: GameState): void {
+  let current: Hint | undefined;
+  for (const h of s.stage.hints ?? []) {
+    if (h.kind === 'banner' && h.x <= s.pos.x) current = h;
+  }
+  if (!current) return;
+  ctx.font = 'bold 40px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = 8;
+  ctx.strokeStyle = '#0b2b0b';
+  ctx.strokeText(current.text, SCREEN_W / 2, 70);
+  ctx.fillStyle = '#4dff4d';
+  ctx.fillText(current.text, SCREEN_W / 2, 70);
+}
+
+/** キーのアイコン(白いキー)と説明の帯(黒半透明・白枠)で操作を示す。 */
+function drawPrompt(ctx: CanvasRenderingContext2D, h: Hint): void {
+  ctx.font = 'bold 16px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const labelW = ctx.measureText(h.text).width + 24;
+  const keyW = h.key ? 32 : 0;
+  const gap = h.key ? 8 : 0;
+  let x = h.x - (keyW + gap + labelW) / 2;
+  const y = h.y;
+  if (h.key) {
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#555';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.roundRect(x, y - 16, keyW, 32, 6);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#222';
+    ctx.fillText(h.key, x + keyW / 2, y);
+    x += keyW + gap;
+  }
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.roundRect(x, y - 16, labelW, 32, 6);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#fff';
+  ctx.fillText(h.text, x + labelW / 2, y);
+}
+
+function drawNote(ctx: CanvasRenderingContext2D, h: Hint): void {
   ctx.font = 'bold 14px sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  for (const h of hints) {
+  {
     const lines = h.text.split('\n');
     const lineH = 20;
     const width = Math.max(...lines.map((l) => ctx.measureText(l).width)) + 20;

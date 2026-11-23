@@ -21,11 +21,18 @@ export interface EnemySpec {
   maxX: number;
 }
 
-/** ステージ上に出す説明書き(チュートリアル用)。text の改行は \n で書く。 */
+/**
+ * ステージ上に出す説明(チュートリアル用)。
+ * - banner: 画面上部に大きく出す目標。キツネの x が hint.x を過ぎると切り替わる(x 昇順で並べる)。
+ * - prompt: キツネが近づくと、その場に出す操作案内。key があればキーのアイコンを付ける。
+ * - note: 常に表示する吹き出し。text の改行は \n で書く。
+ */
 export interface Hint {
+  kind: 'banner' | 'prompt' | 'note';
   x: number;
   y: number;
   text: string;
+  key?: string;
 }
 
 export interface Stage {
