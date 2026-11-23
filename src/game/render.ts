@@ -12,7 +12,7 @@ export function draw(ctx: CanvasRenderingContext2D, s: GameState): void {
   ctx.translate(-cam, 0);
 
   drawSegments(ctx, s.stage.ground, '#7a5a3a', 10);
-  drawSegments(ctx, s.lines.filter((l) => !l.kind), '#1f6feb', 6);
+  drawSegments(ctx, s.lines.filter((l) => !l.kind), '#1f6feb', 12);
   drawShapes(ctx, s.lines.filter((l) => l.kind));
   drawCheckpoints(ctx, s.stage.checkpoints);
   drawGoal(ctx, s.stage.goal);
@@ -53,7 +53,7 @@ function drawShapes(ctx: CanvasRenderingContext2D, segs: Segment[]): void {
     if (!seg.kind) continue;
     const info = SHAPE_INFO[seg.kind];
     ctx.strokeStyle = info.color;
-    ctx.lineWidth = 10;
+    ctx.lineWidth = 14;
     ctx.beginPath();
     ctx.moveTo(seg.a.x, seg.a.y);
     ctx.lineTo(seg.b.x, seg.b.y);
