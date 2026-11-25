@@ -18,7 +18,7 @@ export const SHAPE_INFO: Record<ShapeKind, ShapeInfo> = {
   hole: { label: 'あな', color: '#3e2723', description: '置いた場所の地面に穴を開ける' },
   elevator: { label: 'エレベーター', color: '#5c6bc0', description: '触れると上か下かを選んで動く' },
   fan: { label: '扇風機', color: '#26c6da', description: '上へ風を出し、当たると吹き上げられる' },
-  paper: { label: '紙飛行機', color: '#78909c', description: '乗ると矢印キーで自由に動かせる' },
+  paper: { label: '紙飛行機', color: '#78909c', description: '乗るとタップ/マウスの方向へ動く。10秒で消える' },
   light: { label: 'ライト', color: '#fdd835', description: '周りを照らす' },
 };
 

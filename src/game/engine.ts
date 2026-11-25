@@ -53,7 +53,8 @@ const STUCK_LIMIT = 2; // 秒: 行き止まりとみなすまでの時間
 const FALL_MARGIN = 200; // ステージ下端からこれだけ落ちたら落下扱い
 
 /** 置いたときに状態(時間・動き)を持つ形。 */
-const NEEDS_PROP = new Set<ShapeKind>(['redlight', 'moving', 'robot', 'elevator']);
+const NEEDS_PROP = new Set<ShapeKind>(['redlight', 'moving', 'robot', 'elevator', 'paper']);
+const PAPER_TIME = 10; // 紙飛行機: 置いてから消えるまでの時間(秒)
 
 /** 置いた形1つ分の動きの状態。 */
 export interface Prop {
@@ -228,7 +229,8 @@ export function placeShape(s: GameState, kind: ShapeKind, at: Vec): boolean {
     };
     s.lines.push(seg);
     if (NEEDS_PROP.has(kind)) {
-      s.props.set(seg, { home: { ...at }, t: 0, timer: ROBOT_TIME, mode: 'idle', travel: 0, triggered: false });
+      const timer = kind === 'paper' ? PAPER_TIME : ROBOT_TIME;
+      s.props.set(seg, { home: { ...at }, t: 0, timer, mode: 'idle', travel: 0, triggered: false });
     }
   }
   s.ink -= INK_COST_PER_SHAPE;
@@ -293,6 +295,10 @@ function updateProps(s: GameState, dt: number): void {
         }
         removeSeg(s, seg);
       }
+    } else if (seg.kind === 'paper') {
+      // 紙飛行機は一定時間で消える(乗っていた場合は落ちる)
+      pr.timer -= dt;
+      if (pr.timer <= 0) removeSeg(s, seg);
     } else if (seg.kind === 'moving') {
       pr.t += dt;
       moveSegBy(s, seg, pr.home.x + Math.sin(pr.t * MOVE_OMEGA) * MOVE_AMP - centerX(seg), 0);
@@ -625,6 +631,7 @@ function inBeam(s: GameState, seg: Segment): boolean {
 function removeSeg(s: GameState, seg: Segment): void {
   s.lines = s.lines.filter((l) => l !== seg);
   s.props.delete(seg);
+  if (s.rideSeg === seg) s.rideSeg = null;
 }
 
 function dist(a: Vec, b: Vec): number {

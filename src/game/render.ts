@@ -104,14 +104,14 @@ function drawEffects(ctx: CanvasRenderingContext2D, s: GameState): void {
       ctx.beginPath();
       ctx.arc(cx, y, 220, 0, Math.PI * 2);
       ctx.fill();
-    } else if (seg.kind === 'robot') {
+    } else if (seg.kind === 'robot' || seg.kind === 'paper') {
       const pr = s.props.get(seg);
       if (pr) {
         ctx.fillStyle = '#222';
         ctx.font = 'bold 14px sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'bottom';
-        ctx.fillText(`残り ${Math.ceil(pr.timer)}秒`, cx, y - 22);
+        ctx.fillText(`残り ${Math.ceil(pr.timer)}秒`, cx, y - (seg.kind === 'paper' ? 14 : 22));
       }
     }
   }
