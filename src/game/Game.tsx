@@ -9,7 +9,7 @@ import {
   placeShape,
   SCREEN_H,
   SCREEN_W,
-  setInput,
+  setTarget,
   update,
   type GameState,
 } from './engine';
@@ -87,7 +87,9 @@ export function Game({ stage, frames, onExit }: Props) {
     };
 
     // 枠を選んでいるときは、クリックした位置に形を置く。選んでいないときは線を描く。
+    // 押している間の操作: 線を描く、または紙飛行機に乗っているときは行き先を指す
     let drawing = false;
+    let steering = false;
     const onDown = (e: PointerEvent) => {
       const s = stateRef.current;
       if (s.paused) return;
@@ -97,15 +99,23 @@ export function Game({ stage, frames, onExit }: Props) {
         placeShape(s, kind, toWorld(e));
         return;
       }
-      drawing = true;
       canvas.setPointerCapture(e.pointerId);
+      if (s.rideSeg) {
+        steering = true;
+        setTarget(s, toWorld(e));
+        return;
+      }
+      drawing = true;
       beginStroke(s, toWorld(e));
     };
     const onMove = (e: PointerEvent) => {
       if (drawing) extendStroke(stateRef.current, toWorld(e));
+      else if (steering) setTarget(stateRef.current, toWorld(e));
     };
     const onUp = () => {
       drawing = false;
+      steering = false;
+      setTarget(stateRef.current, null);
       endStroke(stateRef.current);
     };
 
@@ -138,25 +148,12 @@ export function Game({ stage, frames, onExit }: Props) {
     endStroke(s);
   };
 
-  // 数字キー 1〜(枠の数) で枠を選ぶ。矢印キー(WASD)は紙飛行機に乗っているときの移動に使う
+  // 数字キー 1〜(枠の数) で枠を選ぶ
   useEffect(() => {
-    const held = new Set<string>();
-    const syncInput = () => {
-      const x = (held.has('ArrowRight') || held.has('d') || held.has('D') ? 1 : 0) - (held.has('ArrowLeft') || held.has('a') || held.has('A') ? 1 : 0);
-      const y = (held.has('ArrowDown') || held.has('s') || held.has('S') ? 1 : 0) - (held.has('ArrowUp') || held.has('w') || held.has('W') ? 1 : 0);
-      setInput(stateRef.current, x, y);
-    };
-    const arrows = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
     const onKey = (e: KeyboardEvent) => {
       // E/Esc で一時停止(ボタンにフォーカスがあっても効くようにする)
       if (e.key === 'Escape' || e.key === 'e' || e.key === 'E') {
         togglePause();
-        return;
-      }
-      if (arrows.includes(e.key) || 'wasdWASD'.includes(e.key)) {
-        if (arrows.includes(e.key)) e.preventDefault();
-        held.add(e.key);
-        syncInput();
         return;
       }
       if (stateRef.current.paused) return;
@@ -167,16 +164,8 @@ export function Game({ stage, frames, onExit }: Props) {
       selectedRef.current = next;
       setSelected(next);
     };
-    const onKeyUp = (e: KeyboardEvent) => {
-      held.delete(e.key);
-      syncInput();
-    };
     window.addEventListener('keydown', onKey);
-    window.addEventListener('keyup', onKeyUp);
-    return () => {
-      window.removeEventListener('keydown', onKey);
-      window.removeEventListener('keyup', onKeyUp);
-    };
+    return () => window.removeEventListener('keydown', onKey);
   }, []);
 
   const restart = () => {

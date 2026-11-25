@@ -33,7 +33,8 @@ const FAN_HEIGHT = 220; // 扇風機: 風が届く高さ
 const FAN_LIFT = 2600; // 扇風機: 上向きの力(px/s²)
 const FAN_MAX_UP = 420; // 扇風機: 吹き上げの最大速さ(px/s)
 const FAN_PUSH_X = 60; // 扇風機: 右へ押す速さ(px/s)
-const PAPER_SPEED = 200; // 紙飛行機: 矢印キーで動く速さ(px/s)
+const PAPER_SPEED = 200; // 紙飛行機: タップ/マウスの方向へ動く速さ(px/s)
+const ENEMY_FALL_SPEED = 500; // 足場を失った敵が落ちる速さ(px/s)
 
 const ENEMY_RADIUS = 14;
 const ENEMY_SPEED = 60; // 左右に歩く敵の速さ(px/s)
@@ -92,8 +93,8 @@ export interface GameState {
   rideSeg: Segment | null;
   /** エレベーターに触れて、上か下かを選んでいる最中のエレベーター。 */
   choice: Segment | null;
-  /** 矢印キーの入力(紙飛行機に乗っているときの移動)。-1〜1。 */
-  input: Vec;
+  /** 紙飛行機に乗っていて、タップ/マウスを押している間の行き先。離すと null。 */
+  target: Vec | null;
   /** ゲーム開始からの経過時間(秒)。 */
   time: number;
   enemies: EnemyState[];
@@ -155,7 +156,7 @@ export function createState(stage: Stage): GameState {
     stopTimer: 0,
     rideSeg: null,
     choice: null,
-    input: { x: 0, y: 0 },
+    target: null,
     time: 0,
     enemies: spawnEnemies(stage),
     ally: { pos: allySpawn(base), vel: { x: 0, y: 0 } },
@@ -195,9 +196,9 @@ export function endStroke(s: GameState): void {
   s.stroke = null;
 }
 
-/** 紙飛行機の矢印キーの入力を設定する。 */
-export function setInput(s: GameState, x: number, y: number): void {
-  s.input = { x, y };
+/** 紙飛行機の行き先を設定する(null で解除)。 */
+export function setTarget(s: GameState, p: Vec | null): void {
+  s.target = p ? { ...p } : null;
 }
 
 /** エレベーターの行き先を選ぶ。 */
@@ -312,6 +313,12 @@ function updateProps(s: GameState, dt: number): void {
 function moveEnemies(s: GameState, dt: number): void {
   for (const e of s.enemies) {
     if (e.defeated) continue;
+    // 足場がなくなった敵(あなの上)は落ちて、そのまま消える
+    if (!hasGroundBelow(s, e)) {
+      e.pos.y += ENEMY_FALL_SPEED * dt;
+      if (e.pos.y > s.stage.height + FALL_MARGIN) e.defeated = true;
+      continue;
+    }
     e.pos.x += e.dir * ENEMY_SPEED * dt;
     if (e.pos.x <= e.spec.minX) {
       e.pos.x = e.spec.minX;
@@ -321,6 +328,19 @@ function moveEnemies(s: GameState, dt: number): void {
       e.dir = -1;
     }
   }
+}
+
+/** 敵の真下に、敵が立てる地面があるか。 */
+function hasGroundBelow(s: GameState, e: EnemyState): boolean {
+  const x = e.pos.x;
+  const y = e.pos.y + ENEMY_RADIUS;
+  return s.ground.some(
+    (seg) =>
+      Math.abs(seg.a.y - seg.b.y) < 0.5 &&
+      Math.abs(seg.a.y - y) < 4 &&
+      x >= Math.min(seg.a.x, seg.b.x) &&
+      x <= Math.max(seg.a.x, seg.b.x),
+  );
 }
 
 /** 味方は主人公の後ろについてきて、近くにいる間は墨を回復する。 */
@@ -376,10 +396,18 @@ function step(s: GameState, dt: number): void {
   // 赤信号で止まっている間は動かない。直前に触れている形で速さが変わる。
   const mul = s.contacts.includes('slow') ? SLOW_MUL : s.contacts.includes('boost') ? BOOST_MUL : 1;
   if (riding) {
-    // 紙飛行機: 矢印キーで動く。上下キーを離すと重力で一緒に落ちる
-    v.x = s.input.x * PAPER_SPEED;
-    if (s.input.y !== 0) v.y = s.input.y * PAPER_SPEED;
-    else v.y += GRAVITY * dt;
+    // 紙飛行機: タップ/マウスを押している間は、その方向へ進む。離すと重力で落ちる
+    const t = s.target;
+    if (t) {
+      const dx = t.x - p.x;
+      const dy = t.y - p.y;
+      const d = Math.hypot(dx, dy);
+      v.x = d > 4 ? (dx / d) * PAPER_SPEED : 0;
+      v.y = d > 4 ? (dy / d) * PAPER_SPEED : 0;
+    } else {
+      v.x = 0;
+      v.y += GRAVITY * dt;
+    }
   } else {
     v.x = stopped ? 0 : RUN_SPEED * mul;
     v.y += GRAVITY * dt;
