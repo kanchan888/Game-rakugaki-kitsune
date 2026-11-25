@@ -63,7 +63,7 @@ function drawShapes(ctx: CanvasRenderingContext2D, segs: Segment[]): void {
     ctx.lineTo(seg.b.x, seg.b.y);
     ctx.stroke();
     ctx.fillStyle = info.color;
-    ctx.font = 'bold 12px sans-serif';
+    ctx.font = 'bold 16px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'bottom';
     ctx.fillText(info.label, (seg.a.x + seg.b.x) / 2, Math.min(seg.a.y, seg.b.y) - 6);
@@ -108,7 +108,7 @@ function drawEffects(ctx: CanvasRenderingContext2D, s: GameState): void {
       const pr = s.props.get(seg);
       if (pr) {
         ctx.fillStyle = '#222';
-        ctx.font = 'bold 14px sans-serif';
+        ctx.font = 'bold 20px sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'bottom';
         ctx.fillText(`残り ${Math.ceil(pr.timer)}秒`, cx, y - (seg.kind === 'paper' ? 14 : 22));
@@ -135,7 +135,7 @@ function drawAlly(ctx: CanvasRenderingContext2D, p: Vec): void {
   ctx.arc(p.x, p.y, 10, 0, Math.PI * 2);
   ctx.fill();
   ctx.fillStyle = '#fff';
-  ctx.font = 'bold 10px sans-serif';
+  ctx.font = 'bold 14px sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText('味', p.x, p.y + 1);
@@ -187,7 +187,7 @@ function drawInkPickup(ctx: CanvasRenderingContext2D, p: Vec): void {
   ctx.arc(p.x, p.y, 12, 0, Math.PI * 2);
   ctx.fill();
   ctx.fillStyle = '#fff';
-  ctx.font = 'bold 12px sans-serif';
+  ctx.font = 'bold 16px sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText('墨', p.x, p.y + 1);
@@ -227,7 +227,7 @@ function drawBanner(ctx: CanvasRenderingContext2D, s: GameState): void {
     if (h.kind === 'banner' && h.x <= s.pos.x) current = h;
   }
   if (!current) return;
-  ctx.font = 'bold 40px sans-serif';
+  ctx.font = 'bold 44px sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.lineJoin = 'round';
@@ -240,7 +240,7 @@ function drawBanner(ctx: CanvasRenderingContext2D, s: GameState): void {
 
 /** キーのアイコン(白いキー)と説明の帯(黒半透明・白枠)で操作を示す。 */
 function drawPrompt(ctx: CanvasRenderingContext2D, h: Hint): void {
-  ctx.font = 'bold 16px sans-serif';
+  ctx.font = 'bold 22px sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   const labelW = ctx.measureText(h.text).width + 24;
@@ -272,7 +272,7 @@ function drawPrompt(ctx: CanvasRenderingContext2D, h: Hint): void {
 }
 
 function drawNote(ctx: CanvasRenderingContext2D, h: Hint): void {
-  ctx.font = 'bold 14px sans-serif';
+  ctx.font = 'bold 20px sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   {
@@ -296,23 +296,24 @@ function drawHud(ctx: CanvasRenderingContext2D, s: GameState): void {
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'left';
 
-  // インクバー
+  // スマホで縮小されても読めるように、表示は大きめにする
   const barX = 16;
   const barY = 16;
-  const barW = 180;
+  const barW = 240;
   ctx.fillStyle = 'rgba(0,0,0,0.25)';
-  ctx.fillRect(barX, barY, barW, 18);
+  ctx.fillRect(barX, barY, barW, 24);
   ctx.fillStyle = '#1f6feb';
-  ctx.fillRect(barX, barY, barW * Math.max(0, s.ink) / INK_START, 18);
+  ctx.fillRect(barX, barY, (barW * Math.max(0, s.ink)) / INK_START, 24);
   ctx.fillStyle = '#222';
-  ctx.font = 'bold 14px sans-serif';
-  ctx.fillText(`インク ${Math.floor(s.ink)}`, barX + barW + 10, barY + 9);
+  ctx.font = 'bold 26px sans-serif';
+  ctx.fillText(`インク ${Math.floor(s.ink)}`, barX + barW + 12, barY + 12);
 
-  ctx.fillText(`残機 ×${s.lives}`, barX, barY + 40);
-  ctx.fillText(`★ ${s.starsGot.filter(Boolean).length} / ${s.stage.stars.length}`, barX, barY + 64);
-  ctx.fillText(`コイン ${s.coins}`, barX, barY + 88);
+  const rowH = 36;
+  ctx.fillText(`残機 ×${s.lives}`, barX, barY + 24 + rowH);
+  ctx.fillText(`★ ${s.starsGot.filter(Boolean).length} / ${s.stage.stars.length}`, barX, barY + 24 + rowH * 2);
+  ctx.fillText(`コイン ${s.coins}`, barX, barY + 24 + rowH * 3);
 
   ctx.textAlign = 'center';
-  ctx.font = 'bold 16px sans-serif';
-  ctx.fillText(s.stage.name, SCREEN_W / 2, 20);
+  ctx.font = 'bold 28px sans-serif';
+  ctx.fillText(s.stage.name, SCREEN_W / 2, 24);
 }

@@ -43,6 +43,15 @@ export function Game({ stage, frames, onExit }: Props) {
   const [selected, setSelected] = useState<number | null>(null);
   const [paused, setPaused] = useState(false);
   const [choosing, setChoosing] = useState(false);
+  // スマホを縦向きにしていると、横向きを勧める
+  const [portrait, setPortrait] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(orientation: portrait) and (max-width: 900px)');
+    const update = () => setPortrait(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -179,6 +188,11 @@ export function Game({ stage, frames, onExit }: Props) {
 
   return (
     <div style={{ width: '100%', maxWidth: SCREEN_W, margin: '0 auto' }}>
+      {portrait && (
+        <p style={{ fontSize: 14, color: '#555', marginBottom: 6 }}>
+          スマホは横向きにすると、画面が大きく遊びやすくなります
+        </p>
+      )}
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 6 }}>
         {status === 'playing' && (
           <button onClick={togglePause} style={{ padding: '6px 14px', fontSize: 14, cursor: 'pointer' }}>
@@ -191,7 +205,16 @@ export function Game({ stage, frames, onExit }: Props) {
           ref={canvasRef}
           width={SCREEN_W}
           height={SCREEN_H}
-          style={{ width: '100%', height: 'auto', display: 'block', touchAction: 'none', borderRadius: 8 }}
+          style={{
+            width: '100%',
+            height: 'auto',
+            display: 'block',
+            touchAction: 'none',
+            userSelect: 'none',
+            WebkitUserSelect: 'none',
+            WebkitTouchCallout: 'none',
+            borderRadius: 8,
+          }}
         />
         {status === 'playing' && choosing && !paused && (
           <div
@@ -318,7 +341,7 @@ export function Game({ stage, frames, onExit }: Props) {
       <p style={{ fontSize: 13, color: '#555', margin: '4px 0' }}>
         {selectedKind
           ? `「${SHAPE_INFO[selectedKind].label}」を選択中: ${SHAPE_INFO[selectedKind].description}。画面をクリックで置けます(もう一度枠を押すと解除)`
-          : '枠を選ぶと形を置けます(数字キー1〜でも選べます)。枠を選ばないと、マウス・指で線を描けます。'}
+          : '枠を選ぶと形を置けます。枠を選ばないと、指(マウス)で線を描けます。紙飛行機に乗っているときは、押している方向へ進みます。(パソコンは数字キーでも枠を選べます)'}
       </p>
     </div>
   );
