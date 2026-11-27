@@ -9,6 +9,7 @@ import { stage06 } from './stage06';
 import { stage07 } from './stage07';
 import { stage08 } from './stage08';
 import { stage09 } from './stage09';
+import { stage10 } from './stage10';
 
 /** 遊べるステージの一覧(順番どおりに解放される。最初はチュートリアル)。 */
 export const STAGES: Stage[] = [
@@ -22,4 +23,5 @@ export const STAGES: Stage[] = [
   stage07,
   stage08,
   stage09,
+  stage10,
 ];
